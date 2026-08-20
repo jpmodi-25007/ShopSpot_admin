@@ -1,0 +1,428 @@
+/* ============================================
+   Shared Admin Component Styles
+   Use these in any page module via composes
+   ============================================ */
+
+/* === Page Header === */
+.pageHeader {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  margin-bottom: 28px;
+  flex-wrap: wrap;
+  gap: 16px;
+}
+
+.pageTitle {
+  font-size: 24px;
+  font-weight: 800;
+  color: var(--neutral-900);
+  letter-spacing: -0.02em;
+}
+
+.pageSubtitle {
+  font-size: 13.5px;
+  color: var(--neutral-500);
+  margin-top: 4px;
+}
+
+/* === Buttons === */
+.btnPrimary {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 9px 18px;
+  background: linear-gradient(135deg, var(--primary-500), var(--primary-600));
+  color: white;
+  border-radius: var(--radius-md);
+  font-size: 13px;
+  font-weight: 600;
+  transition: all var(--transition-fast);
+  box-shadow: 0 2px 8px rgba(15,118,110,0.22);
+  border: none;
+  cursor: pointer;
+}
+
+.btnPrimary:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 4px 14px rgba(15,118,110,0.32);
+}
+
+.btnSecondary {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 9px 16px;
+  background: var(--white);
+  color: var(--neutral-700);
+  border: 1.5px solid var(--neutral-200);
+  border-radius: var(--radius-md);
+  font-size: 13px;
+  font-weight: 600;
+  transition: all var(--transition-fast);
+  cursor: pointer;
+}
+
+.btnSecondary:hover {
+  background: var(--neutral-50);
+  border-color: var(--neutral-300);
+}
+
+.btnDanger {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 9px 16px;
+  background: var(--error-50, #FFF1F2);
+  color: var(--error-500);
+  border: 1.5px solid var(--error-100);
+  border-radius: var(--radius-md);
+  font-size: 13px;
+  font-weight: 600;
+  transition: all var(--transition-fast);
+  cursor: pointer;
+}
+
+.btnDanger:hover {
+  background: var(--error-500);
+  color: white;
+}
+
+/* === Filter/Search Bar === */
+.toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  background: var(--white);
+  padding: 14px 20px;
+  border-radius: var(--radius-lg);
+  border: 1.5px solid var(--neutral-200);
+  margin-bottom: 16px;
+  box-shadow: var(--shadow-xs);
+  flex-wrap: wrap;
+}
+
+.toolbarSearch {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  background: var(--neutral-100);
+  border-radius: var(--radius-md);
+  padding: 8px 14px;
+  flex: 1;
+  min-width: 200px;
+  max-width: 360px;
+  border: 1.5px solid transparent;
+  transition: all var(--transition-fast);
+}
+
+.toolbarSearch:focus-within {
+  background: var(--white);
+  border-color: var(--primary-400);
+  box-shadow: 0 0 0 3px var(--primary-50);
+}
+
+.toolbarSearchInput {
+  border: none;
+  background: transparent;
+  outline: none;
+  font-size: 13.5px;
+  color: var(--neutral-900);
+  width: 100%;
+}
+
+.toolbarSearchInput::placeholder { color: var(--neutral-400); }
+
+.toolbarActions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.toolbarFilter {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 7px 12px;
+  background: var(--neutral-100);
+  border: 1.5px solid transparent;
+  border-radius: var(--radius-md);
+  font-size: 12.5px;
+  font-weight: 600;
+  color: var(--neutral-600);
+  cursor: pointer;
+  transition: all var(--transition-fast);
+}
+
+.toolbarFilter:hover {
+  background: var(--neutral-200);
+  color: var(--neutral-900);
+}
+
+/* === Card === */
+.card {
+  background: var(--white);
+  border-radius: var(--radius-lg);
+  border: 1.5px solid var(--neutral-200);
+  box-shadow: var(--shadow-card);
+  overflow: hidden;
+}
+
+.cardHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 18px 22px;
+  border-bottom: 1px solid var(--neutral-100);
+}
+
+.cardTitle {
+  font-size: 15px;
+  font-weight: 700;
+  color: var(--neutral-900);
+}
+
+/* === Table === */
+.tableWrap {
+  overflow-x: auto;
+}
+
+.table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 13.5px;
+}
+
+.table thead tr {
+  background: var(--neutral-50);
+  border-bottom: 1.5px solid var(--neutral-200);
+}
+
+.table thead th {
+  padding: 11px 18px;
+  text-align: left;
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--neutral-500);
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  white-space: nowrap;
+}
+
+.table tbody tr {
+  border-bottom: 1px solid var(--neutral-100);
+  transition: background var(--transition-fast);
+}
+
+.table tbody tr:last-child { border-bottom: none; }
+
+.table tbody tr:hover { background: var(--neutral-50); }
+
+.table tbody td {
+  padding: 14px 18px;
+  color: var(--neutral-700);
+  vertical-align: middle;
+}
+
+/* === Status Badges === */
+.statusBadge {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 3px 9px;
+  border-radius: var(--radius-full);
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.statusBadge::before {
+  content: '';
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+  background: currentColor;
+}
+
+.statusActive {
+  background: var(--success-100);
+  color: var(--success-600);
+}
+
+.statusPending {
+  background: var(--warning-100);
+  color: var(--warning-600);
+}
+
+.statusSuspended {
+  background: var(--error-100);
+  color: var(--error-500);
+}
+
+.statusInactive {
+  background: var(--neutral-100);
+  color: var(--neutral-600);
+}
+
+/* === Action Buttons in Table === */
+.actionBtns {
+  display: flex;
+  gap: 6px;
+  align-items: center;
+}
+
+.actionBtn {
+  width: 30px;
+  height: 30px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: var(--radius-sm);
+  border: 1.5px solid var(--neutral-200);
+  color: var(--neutral-500);
+  background: var(--white);
+  cursor: pointer;
+  transition: all var(--transition-fast);
+}
+
+.actionBtn:hover {
+  background: var(--neutral-100);
+  color: var(--neutral-900);
+  border-color: var(--neutral-300);
+}
+
+.actionBtnDanger:hover {
+  background: var(--error-50, #FFF1F2);
+  color: var(--error-500);
+  border-color: var(--error-100);
+}
+
+/* === Avatar === */
+.shopAvatar {
+  width: 36px;
+  height: 36px;
+  border-radius: var(--radius-md);
+  object-fit: cover;
+  border: 1.5px solid var(--neutral-200);
+}
+
+.shopAvatarPlaceholder {
+  width: 36px;
+  height: 36px;
+  border-radius: var(--radius-md);
+  background: var(--primary-100);
+  color: var(--primary-500);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: 700;
+  font-size: 14px;
+}
+
+.shopInfo {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.shopName {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--neutral-900);
+}
+
+.shopMeta {
+  font-size: 12px;
+  color: var(--neutral-500);
+  margin-top: 1px;
+}
+
+/* === Pagination === */
+.pagination {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 14px 20px;
+  border-top: 1px solid var(--neutral-100);
+  flex-wrap: wrap;
+  gap: 12px;
+}
+
+.paginationMeta {
+  font-size: 12.5px;
+  color: var(--neutral-500);
+}
+
+.paginationBtns {
+  display: flex;
+  gap: 4px;
+}
+
+.pgBtn {
+  width: 32px;
+  height: 32px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: var(--radius-sm);
+  font-size: 13px;
+  font-weight: 500;
+  border: 1.5px solid var(--neutral-200);
+  color: var(--neutral-700);
+  background: var(--white);
+  cursor: pointer;
+  transition: all var(--transition-fast);
+}
+
+.pgBtn:hover {
+  background: var(--neutral-100);
+  border-color: var(--neutral-300);
+}
+
+.pgBtnActive {
+  background: var(--primary-500) !important;
+  color: white !important;
+  border-color: var(--primary-500) !important;
+}
+
+/* === Empty State === */
+.emptyState {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 60px 20px;
+  gap: 12px;
+}
+
+.emptyIcon {
+  width: 60px;
+  height: 60px;
+  background: var(--neutral-100);
+  border-radius: var(--radius-xl, 20px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--neutral-400);
+}
+
+.emptyTitle {
+  font-size: 16px;
+  font-weight: 700;
+  color: var(--neutral-700);
+}
+
+.emptyDesc {
+  font-size: 13px;
+  color: var(--neutral-400);
+  text-align: center;
+}
+
+/* === Responsive === */
+@media (max-width: 768px) {
+  .pageHeader { flex-direction: column; align-items: flex-start; }
+  .toolbar { flex-direction: column; align-items: stretch; }
+  .toolbarSearch { max-width: 100%; }
+}

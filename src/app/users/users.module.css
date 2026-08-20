@@ -1,0 +1,367 @@
+.container {
+  display: flex;
+  flex-direction: column;
+  gap: 24px;
+}
+
+.header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-end;
+}
+
+.title {
+  font-size: 24px;
+  font-weight: 700;
+  color: var(--neutral-900);
+  margin-bottom: 4px;
+}
+
+.subtitle {
+  color: var(--neutral-500);
+  font-size: 14px;
+}
+
+.headerActions {
+  display: flex;
+  gap: 12px;
+}
+
+.btnSecondary {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 16px;
+  background: var(--white);
+  border: 1px solid var(--neutral-300);
+  border-radius: var(--radius-md);
+  color: var(--neutral-700);
+  font-size: 14px;
+  font-weight: 500;
+  transition: all 0.2s;
+}
+
+.btnSecondary:hover {
+  background: var(--neutral-50);
+  border-color: var(--neutral-400);
+}
+
+.btnPrimary {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 16px;
+  background: var(--primary-500);
+  border-radius: var(--radius-md);
+  color: var(--white);
+  font-size: 14px;
+  font-weight: 600;
+  transition: all 0.2s;
+}
+
+.btnPrimary:hover {
+  background: var(--primary-600);
+}
+
+.metricsGrid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 24px;
+}
+
+.metricCard {
+  background: var(--white);
+  border-radius: var(--radius-lg);
+  padding: 24px;
+  border: 1px solid var(--neutral-200);
+  box-shadow: var(--shadow-sm);
+  display: flex;
+  flex-direction: column;
+}
+
+.metricHeader {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--neutral-500);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  margin-bottom: 8px;
+}
+
+.metricValue {
+  font-size: 32px;
+  font-weight: 700;
+  color: var(--neutral-900);
+  margin-bottom: 8px;
+}
+
+.metricTrend {
+  font-size: 13px;
+  font-weight: 500;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.trendPositive { color: var(--success-500); }
+
+.ringChartContainer {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+}
+
+.ringStats {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.ringStatItem {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--neutral-900);
+}
+
+.ringDot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+}
+
+.ringDot.teal { background: var(--primary-500); }
+.ringDot.amber { background: var(--secondary-500); }
+
+.ringValue {
+  color: var(--neutral-500);
+  font-weight: 400;
+}
+
+.chartCircle {
+  width: 60px;
+  height: 60px;
+  border-radius: 50%;
+  border: 6px solid var(--secondary-500);
+  border-left-color: var(--primary-500);
+  border-top-color: var(--primary-500);
+  border-right-color: var(--primary-500);
+  transform: rotate(45deg);
+}
+
+.tableCard {
+  background: var(--white);
+  border-radius: var(--radius-lg);
+  border: 1px solid var(--neutral-200);
+  box-shadow: var(--shadow-sm);
+  overflow: hidden;
+}
+
+.filterBar {
+  padding: 20px 24px;
+  border-bottom: 1px solid var(--neutral-200);
+  display: flex;
+  gap: 16px;
+  align-items: center;
+}
+
+.searchWrapper {
+  flex: 2;
+  position: relative;
+  display: flex;
+  align-items: center;
+}
+
+.searchIcon {
+  position: absolute;
+  left: 12px;
+  color: var(--neutral-400);
+}
+
+.searchInput {
+  width: 100%;
+  height: 40px;
+  padding: 0 12px 0 36px;
+  border: 1px solid var(--neutral-300);
+  border-radius: var(--radius-md);
+  font-size: 14px;
+  outline: none;
+}
+
+.searchInput:focus {
+  border-color: var(--primary-400);
+}
+
+.selectWrapper {
+  flex: 1;
+  position: relative;
+}
+
+.selectInput {
+  width: 100%;
+  height: 40px;
+  padding: 0 32px 0 12px;
+  border: 1px solid var(--neutral-300);
+  border-radius: var(--radius-md);
+  font-size: 14px;
+  appearance: none;
+  background-color: var(--white);
+  outline: none;
+  color: var(--neutral-700);
+}
+
+.selectInput:focus {
+  border-color: var(--primary-400);
+}
+
+.chevronIcon {
+  position: absolute;
+  right: 12px;
+  top: 50%;
+  transform: translateY(-50%);
+  color: var(--neutral-400);
+  pointer-events: none;
+}
+
+.table {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+.table th {
+  padding: 16px 24px;
+  text-align: left;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--neutral-500);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  background: var(--neutral-50);
+  border-bottom: 1px solid var(--neutral-200);
+}
+
+.table td {
+  padding: 16px 24px;
+  border-bottom: 1px solid var(--neutral-200);
+  vertical-align: middle;
+}
+
+.table tr:last-child td {
+  border-bottom: none;
+}
+
+.userCell {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.avatar {
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  object-fit: cover;
+  background: var(--primary-100);
+  color: var(--primary-500);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: 600;
+  font-size: 14px;
+}
+
+.userInfo {
+  display: flex;
+  flex-direction: column;
+}
+
+.userName {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--neutral-900);
+}
+
+.userEmail {
+  font-size: 13px;
+  color: var(--neutral-500);
+}
+
+.textCell {
+  font-size: 14px;
+  color: var(--neutral-700);
+}
+
+.badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 10px;
+  border-radius: var(--radius-full);
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.badge.active { background: var(--success-100); color: var(--success-500); }
+.badge.inactive { background: var(--neutral-100); color: var(--neutral-500); }
+
+.actionCell {
+  display: flex;
+  gap: 12px;
+  color: var(--neutral-400);
+}
+
+.actionIcon {
+  cursor: pointer;
+  transition: color 0.2s;
+}
+
+.actionIcon:hover {
+  color: var(--neutral-700);
+}
+
+.pagination {
+  padding: 16px 24px;
+  border-top: 1px solid var(--neutral-200);
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.pageInfo {
+  font-size: 13px;
+  color: var(--neutral-500);
+}
+
+.pageControls {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.pageBtn {
+  width: 32px;
+  height: 32px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: var(--radius-sm);
+  color: var(--neutral-600);
+  font-size: 14px;
+  font-weight: 500;
+}
+
+.pageBtn:hover:not(:disabled) {
+  background: var(--neutral-100);
+}
+
+.pageBtn.active {
+  background: var(--primary-500);
+  color: var(--white);
+}
+
+.pageBtn:disabled {
+  color: var(--neutral-300);
+  cursor: not-allowed;
+}
