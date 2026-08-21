@@ -2,7 +2,7 @@
 
 import React, { useState, useEffect } from "react";
 import AdminLayout from "@/components/AdminLayout/AdminLayout";
-import { CreditCard, ShieldCheck } from "lucide-react";
+import { CreditCard, ShieldCheck, FileText } from "lucide-react";
 import styles from "./settings.module.css";
 import useSWR from "swr";
 import { fetcher } from "@/lib/fetcher";
@@ -11,16 +11,22 @@ import toast from "react-hot-toast";
 
 export default function SettingsScreen() {
   const { data: initialSettings, error, mutate } = useSWR(`${API_URL}/admin/settings`, fetcher);
-  
+
   const [settings, setSettings] = useState({
     subscriptionFee: 0,
     transactionFee: 5.0,
     require2FA: true,
     sessionTimeout: 120,
     paymentGateway: 'stripe_live',
-    payoutSchedule: 'weekly'
+    payoutSchedule: 'weekly',
+    legal: {
+      customer: { terms: '', privacy: '' },
+      retailer: { terms: '', privacy: '' },
+      influencer: { terms: '', privacy: '' },
+    }
   });
   const [isSaving, setIsSaving] = useState(false);
+  const [activeLegalRole, setActiveLegalRole] = useState<'customer' | 'retailer' | 'influencer'>('customer');
 
   useEffect(() => {
     if (initialSettings) {
@@ -77,35 +83,35 @@ export default function SettingsScreen() {
               <CreditCard size={20} className={styles.sectionIcon} />
               Platform Fees & Pricing
             </h3>
-            
+
             <div className={styles.grid3}>
               <div className={styles.tierCard}>
                 <div className={styles.tierHeader}>
                   <span className={styles.tierName}>Platform Fees</span>
                 </div>
-                
+
                 <div className={styles.inputGroup}>
                   <label className={styles.label}>Subscription Fee (Monthly)</label>
                   <div className={styles.inputWrapper}>
                     <span className={styles.prefix}>₹</span>
-                    <input 
-                      type="number" 
-                      className={`${styles.input} ${styles.inputWithPrefix}`} 
-                      value={settings.subscriptionFee} 
-                      onChange={(e) => setSettings({...settings, subscriptionFee: parseFloat(e.target.value) || 0})}
+                    <input
+                      type="number"
+                      className={`${styles.input} ${styles.inputWithPrefix}`}
+                      value={settings.subscriptionFee}
+                      onChange={(e) => setSettings({ ...settings, subscriptionFee: parseFloat(e.target.value) || 0 })}
                     />
                   </div>
                 </div>
-                
+
                 <div className={styles.inputGroup}>
                   <label className={styles.label}>Transaction Fee (%)</label>
                   <div className={styles.inputWrapper}>
-                    <input 
-                      type="number" 
+                    <input
+                      type="number"
                       step="0.1"
-                      className={`${styles.input} ${styles.inputWithSuffix}`} 
-                      value={settings.transactionFee} 
-                      onChange={(e) => setSettings({...settings, transactionFee: parseFloat(e.target.value) || 0})}
+                      className={`${styles.input} ${styles.inputWithSuffix}`}
+                      value={settings.transactionFee}
+                      onChange={(e) => setSettings({ ...settings, transactionFee: parseFloat(e.target.value) || 0 })}
                     />
                     <span className={styles.suffix}>%</span>
                   </div>
@@ -113,26 +119,26 @@ export default function SettingsScreen() {
               </div>
             </div>
           </div>
-          
+
           <div className={styles.divider} />
-          
+
           <div className={styles.section}>
             <h3 className={styles.sectionTitle}>
               <ShieldCheck size={20} className={styles.sectionIcon} />
               Authentication & Security
             </h3>
-            
+
             <div className={styles.grid2}>
               <div>
                 <h4 className={styles.label} style={{ marginBottom: '16px' }}>Session Management</h4>
-                
+
                 <div className={styles.inputGroup}>
                   <label className={styles.label}>Idle Timeout</label>
                   <div className={styles.inputWrapper}>
-                    <select 
-                      className={styles.input} 
+                    <select
+                      className={styles.input}
                       value={settings.sessionTimeout}
-                      onChange={(e) => setSettings({...settings, sessionTimeout: parseInt(e.target.value, 10) || 120})}
+                      onChange={(e) => setSettings({ ...settings, sessionTimeout: parseInt(e.target.value, 10) || 120 })}
                     >
                       <option value="15">15 Minutes</option>
                       <option value="30">30 Minutes</option>
@@ -150,9 +156,9 @@ export default function SettingsScreen() {
                     <span className={styles.toggleTitle}>Require 2FA for Admins</span>
                     <span className={styles.toggleDesc}>Mandatory two-factor auth via SMS/Email</span>
                   </div>
-                  <div 
+                  <div
                     className={`${styles.toggle} ${!settings.require2FA ? styles.off : ''}`}
-                    onClick={() => setSettings({...settings, require2FA: !settings.require2FA})}
+                    onClick={() => setSettings({ ...settings, require2FA: !settings.require2FA })}
                   >
                     <div className={styles.toggleKnob}></div>
                   </div>
@@ -161,13 +167,13 @@ export default function SettingsScreen() {
 
               <div>
                 <h4 className={styles.label} style={{ marginBottom: '16px' }}>Payment Gateway</h4>
-                
+
                 <div className={styles.inputGroup}>
                   <label className={styles.label}>Active Gateway Provider</label>
-                  <select 
+                  <select
                     className={styles.input}
                     value={settings.paymentGateway}
-                    onChange={(e) => setSettings({...settings, paymentGateway: e.target.value})}
+                    onChange={(e) => setSettings({ ...settings, paymentGateway: e.target.value })}
                   >
                     <option value="stripe_live">Stripe (Live)</option>
                     <option value="stripe_test">Stripe (Test)</option>
@@ -175,13 +181,13 @@ export default function SettingsScreen() {
                     <option value="paypal">PayPal</option>
                   </select>
                 </div>
-                
+
                 <div className={styles.inputGroup}>
                   <label className={styles.label}>Default Payout Schedule</label>
-                  <select 
+                  <select
                     className={styles.input}
                     value={settings.payoutSchedule}
-                    onChange={(e) => setSettings({...settings, payoutSchedule: e.target.value})}
+                    onChange={(e) => setSettings({ ...settings, payoutSchedule: e.target.value })}
                   >
                     <option value="daily">Daily</option>
                     <option value="weekly">Weekly (Monday)</option>
@@ -189,6 +195,62 @@ export default function SettingsScreen() {
                     <option value="monthly">Monthly</option>
                   </select>
                 </div>
+              </div>
+            </div>
+          </div>
+
+          <div className={styles.divider} />
+
+          <div className={styles.section}>
+            <h3 className={styles.sectionTitle}>
+              <FileText size={20} className={styles.sectionIcon} />
+              Legal & Policies (Markdown Supported)
+            </h3>
+
+            <div style={{ display: 'flex', gap: '8px', marginBottom: '16px' }}>
+              {['customer', 'retailer', 'influencer'].map(role => (
+                <button
+                  key={role}
+                  className={activeLegalRole === role ? styles.btnPrimary : styles.btnSecondary}
+                  onClick={() => setActiveLegalRole(role as any)}
+                  style={{ textTransform: 'capitalize', padding: '8px 16px', borderRadius: '8px', cursor: 'pointer', border: '1px solid var(--neutral-200)', background: activeLegalRole === role ? 'var(--primary-500)' : 'var(--white)', color: activeLegalRole === role ? 'white' : 'var(--neutral-700)' }}
+                >
+                  {role}
+                </button>
+              ))}
+            </div>
+
+            <div className={styles.grid2}>
+              <div className={styles.inputGroup}>
+                <label className={styles.label}>Terms of Service ({activeLegalRole})</label>
+                <textarea
+                  className={styles.input}
+                  style={{ minHeight: '300px', resize: 'vertical', fontFamily: 'monospace' }}
+                  value={settings.legal?.[activeLegalRole]?.terms || ''}
+                  onChange={(e) => {
+                    const newLegal = { ...settings.legal };
+                    if (!newLegal[activeLegalRole]) newLegal[activeLegalRole] = { terms: '', privacy: '' };
+                    newLegal[activeLegalRole].terms = e.target.value;
+                    setSettings({ ...settings, legal: newLegal });
+                  }}
+                  placeholder="# Terms of Service\n\nEnter terms here in markdown..."
+                />
+              </div>
+
+              <div className={styles.inputGroup}>
+                <label className={styles.label}>Privacy Policy ({activeLegalRole})</label>
+                <textarea
+                  className={styles.input}
+                  style={{ minHeight: '300px', resize: 'vertical', fontFamily: 'monospace' }}
+                  value={settings.legal?.[activeLegalRole]?.privacy || ''}
+                  onChange={(e) => {
+                    const newLegal = { ...settings.legal };
+                    if (!newLegal[activeLegalRole]) newLegal[activeLegalRole] = { terms: '', privacy: '' };
+                    newLegal[activeLegalRole].privacy = e.target.value;
+                    setSettings({ ...settings, legal: newLegal });
+                  }}
+                  placeholder="# Privacy Policy\n\nEnter policy here in markdown..."
+                />
               </div>
             </div>
           </div>

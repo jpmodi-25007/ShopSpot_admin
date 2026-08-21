@@ -11,6 +11,9 @@ import toast from 'react-hot-toast';
 export default function NotificationsPage() {
   const { data: notificationsData, error, mutate } = useSWR(`${API_URL}/admin/notifications`, fetcher);
   const [isMarking, setIsMarking] = useState(false);
+  const [isBroadcasting, setIsBroadcasting] = useState(false);
+  const [showBroadcastModal, setShowBroadcastModal] = useState(false);
+  const [broadcastData, setBroadcastData] = useState({ title: '', body: '', targetRole: 'ALL' });
 
   const handleMarkAllRead = async () => {
     if (!notificationsData?.length) return;
@@ -34,6 +37,31 @@ export default function NotificationsPage() {
     }
   };
 
+  const handleBroadcast = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!broadcastData.title || !broadcastData.body) return toast.error("Title and body are required");
+    try {
+      setIsBroadcasting(true);
+      const token = localStorage.getItem("accessToken");
+      const res = await fetch(`${API_URL}/notifications/broadcast`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`
+        },
+        body: JSON.stringify(broadcastData)
+      });
+      if (!res.ok) throw new Error("Failed to broadcast notification");
+      toast.success("Notification broadcasted successfully!");
+      setShowBroadcastModal(false);
+      setBroadcastData({ title: '', body: '', targetRole: 'ALL' });
+    } catch (e: any) {
+      toast.error(e.message);
+    } finally {
+      setIsBroadcasting(false);
+    }
+  };
+
   const notifications = notificationsData || [];
 
   return (
@@ -44,8 +72,12 @@ export default function NotificationsPage() {
           <p className={sharedStyles.pageSubtitle}>Manage your system alerts and notifications</p>
         </div>
         <div className={sharedStyles.headerActions}>
-          <button className={sharedStyles.primaryBtn} onClick={handleMarkAllRead} disabled={isMarking}>
+          <button className={sharedStyles.secondaryBtn} onClick={() => setShowBroadcastModal(true)}>
             <Bell size={18} />
+            <span>Broadcast</span>
+          </button>
+          <button className={sharedStyles.primaryBtn} onClick={handleMarkAllRead} disabled={isMarking}>
+            <ShieldCheck size={18} />
             <span>{isMarking ? 'Marking...' : 'Mark All Read'}</span>
           </button>
         </div>
@@ -110,6 +142,58 @@ export default function NotificationsPage() {
           </div>
         </div>
       </div>
+
+      {showBroadcastModal && (
+        <div style={{ position: 'fixed', inset: 0, backgroundColor: 'rgba(0,0,0,0.5)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 50 }}>
+          <div style={{ backgroundColor: 'white', padding: '24px', borderRadius: '12px', width: '400px', maxWidth: '90%' }}>
+            <h2 style={{ marginTop: 0, marginBottom: '16px', fontSize: '18px', fontWeight: 600 }}>Broadcast Notification</h2>
+            <form onSubmit={handleBroadcast} style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+              <div>
+                <label style={{ display: 'block', marginBottom: '8px', fontSize: '14px', fontWeight: 500 }}>Target Audience</label>
+                <select 
+                  value={broadcastData.targetRole}
+                  onChange={e => setBroadcastData(prev => ({ ...prev, targetRole: e.target.value }))}
+                  style={{ width: '100%', padding: '10px', borderRadius: '8px', border: '1px solid #D1D5DB' }}
+                >
+                  <option value="ALL">Everyone</option>
+                  <option value="SHOPKEEPER">Shopkeepers</option>
+                  <option value="CUSTOMER">Customers</option>
+                  <option value="INFLUENCER">Influencers</option>
+                </select>
+              </div>
+              <div>
+                <label style={{ display: 'block', marginBottom: '8px', fontSize: '14px', fontWeight: 500 }}>Title</label>
+                <input 
+                  required
+                  type="text" 
+                  value={broadcastData.title}
+                  onChange={e => setBroadcastData(prev => ({ ...prev, title: e.target.value }))}
+                  style={{ width: '100%', padding: '10px', borderRadius: '8px', border: '1px solid #D1D5DB' }}
+                  placeholder="Notification title..."
+                />
+              </div>
+              <div>
+                <label style={{ display: 'block', marginBottom: '8px', fontSize: '14px', fontWeight: 500 }}>Message Body</label>
+                <textarea 
+                  required
+                  value={broadcastData.body}
+                  onChange={e => setBroadcastData(prev => ({ ...prev, body: e.target.value }))}
+                  style={{ width: '100%', padding: '10px', borderRadius: '8px', border: '1px solid #D1D5DB', minHeight: '100px' }}
+                  placeholder="What do you want to say?"
+                />
+              </div>
+              <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '12px', marginTop: '8px' }}>
+                <button type="button" onClick={() => setShowBroadcastModal(false)} style={{ padding: '10px 16px', borderRadius: '8px', border: '1px solid #D1D5DB', backgroundColor: 'white', cursor: 'pointer' }}>
+                  Cancel
+                </button>
+                <button type="submit" disabled={isBroadcasting} style={{ padding: '10px 16px', borderRadius: '8px', border: 'none', backgroundColor: '#0F766E', color: 'white', cursor: 'pointer', fontWeight: 500 }}>
+                  {isBroadcasting ? 'Sending...' : 'Send Broadcast'}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
