@@ -14,8 +14,8 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "ShopSpot Admin",
-  description: "ShopSpot Admin Dashboard — Manage shops, users, analytics and more.",
+  title: "Findivo Admin",
+  description: "Findivo Admin Dashboard — Manage shops, users, analytics and more.",
   icons: {
     icon: [
       { url: "/favicon.ico", sizes: "32x32", type: "image/x-icon" },

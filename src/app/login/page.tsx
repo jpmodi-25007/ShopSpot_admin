@@ -9,7 +9,7 @@ import { API_URL } from "@/config/constants";
 export default function LoginScreen() {
   const router = useRouter();
   const [showPassword, setShowPassword] = useState(false);
-  const [email, setEmail] = useState("admin@shopspot.com");
+  const [email, setEmail] = useState("admin@findivo.com");
   const [password, setPassword] = useState("password");
 
   const [error, setError] = useState("");
@@ -40,7 +40,7 @@ export default function LoginScreen() {
       <div className={styles.loginCard}>
         <div className={styles.logoContainer}>
           <Store size={48} className={styles.logoIcon} />
-          <h1 className={styles.title}>ShopSpot Suite</h1>
+          <h1 className={styles.title}>Findivo Admin</h1>
           <p className={styles.subtitle}>Super Admin Portal</p>
         </div>
 
@@ -60,7 +60,7 @@ export default function LoginScreen() {
                 className={styles.input}
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
-                placeholder="admin@shopspot.com"
+                placeholder="admin@findivo.com"
                 required
               />
             </div>

@@ -22,6 +22,7 @@ import {
   Sparkles,
   Menu,
   X,
+  Calendar,
 } from "lucide-react";
 import styles from "./AdminLayout.module.css";
 import toast from "react-hot-toast";
@@ -33,6 +34,8 @@ interface AdminLayoutProps {
 const navItems = [
   { label: "Dashboard", href: "/dashboard", icon: LayoutDashboard, section: "main" },
   { label: "Shop Management", href: "/shops", icon: ShoppingBag, section: "main" },
+  { label: "Promotions", href: "/promotions", icon: Sparkles, section: "main" },
+  { label: "Events", href: "/events", icon: Calendar, section: "main" },
   { label: "User Management", href: "/users", icon: Users, section: "main" },
   { label: "Influencers", href: "/influencers", icon: Star, section: "main" },
   { label: "Moderation", href: "/moderation", icon: ShieldAlert, section: "ops", badge: "3" },
@@ -90,7 +93,7 @@ export default function AdminLayout({ children }: AdminLayoutProps) {
             <Store size={20} className={styles.logoIcon} />
           </div>
           <div className={styles.logoText}>
-            <span className={styles.logoTitle}>ShopSpot</span>
+            <span className={styles.logoTitle}>Findivo</span>
             <span className={styles.logoSubtitle}>Admin Portal</span>
           </div>
           <button className={styles.sidebarClose} onClick={() => setSidebarOpen(false)}>
