@@ -44,7 +44,7 @@ export default function ModerationPage() {
     { label: "Pending", value: (statsData?.totalFlagged || 0) - (statsData?.resolved || 0), icon: XCircle, color: "#EF4444", bg: "var(--error-100)" },
   ];
 
-  const [search, setSearch] = useState("");
+
   const filtered = reports.filter((r: { targetType?: string; status?: string; reporter?: { name?: string }; reason?: string; title?: string; shop?: { name?: string } }) => {
     let matchStatus = true;
     if (statusFilter !== "ALL") matchStatus = r.status === statusFilter;
