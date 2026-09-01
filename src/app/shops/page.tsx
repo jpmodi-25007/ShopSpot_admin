@@ -32,9 +32,13 @@ export default function ShopsPage() {
   const { data: categoriesData } = useSWR(`${API_URL}/categories`, fetcher);
   
   const shops = data?.data || [];
+  const meta = data?.meta || { total: 0, page: 1, limit: 50, totalPages: 1 };
   const categories = Array.isArray(categoriesData) ? categoriesData : (categoriesData?.data || []);
 
   const [search, setSearch] = useState("");
+  const [statusFilter, setStatusFilter] = useState("ALL");
+  const [categoryFilter, setCategoryFilter] = useState("ALL");
+  const [dateFilter, setDateFilter] = useState("ALL");
   const [isAddOpen, setAddOpen] = useState(false);
   const [editShopId, setEditShopId] = useState<string | null>(null);
   const [deleteShopId, setDeleteShopId] = useState<string | null>(null);
@@ -183,11 +187,59 @@ export default function ShopsPage() {
     }
   };
 
-  const filtered = shops.filter(
-    (s: { name?: string; owner?: { name?: string; email?: string } }) =>
-      s.name?.toLowerCase().includes(search.toLowerCase()) ||
-      s.owner?.name?.toLowerCase().includes(search.toLowerCase())
-  );
+  const filtered = shops.filter((s: { name?: string; owner?: { name?: string; email?: string }; isKycVerified?: boolean; categoryId?: string; createdAt?: string }) => {
+    let matchStatus = true;
+    if (statusFilter === "VERIFIED") matchStatus = s.isKycVerified === true;
+    if (statusFilter === "PENDING") matchStatus = s.isKycVerified === false;
+    
+    let matchCategory = true;
+    if (categoryFilter !== "ALL") matchCategory = s.categoryId === categoryFilter;
+
+    let matchDate = true;
+    if (dateFilter !== "ALL" && s.createdAt) {
+      const joinDate = new Date(s.createdAt);
+      const now = new Date();
+      const diffTime = Math.abs(now.getTime() - joinDate.getTime());
+      const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+      
+      if (dateFilter === "LAST_7_DAYS") matchDate = diffDays <= 7;
+      if (dateFilter === "LAST_30_DAYS") matchDate = diffDays <= 30;
+      if (dateFilter === "THIS_YEAR") matchDate = joinDate.getFullYear() === now.getFullYear();
+    }
+
+    if (!search) return matchStatus && matchCategory && matchDate;
+    const searchLower = search.toLowerCase();
+    const matchName = s.name?.toLowerCase().includes(searchLower) || false;
+    const matchOwnerName = s.owner?.name?.toLowerCase().includes(searchLower) || false;
+    return matchStatus && matchCategory && matchDate && (matchName || matchOwnerName);
+  });
+
+  const handleExportCSV = () => {
+    if (filtered.length === 0) {
+      toast.error("No data to export");
+      return;
+    }
+    const headers = ["ID", "Shop Name", "Category", "City", "Status", "Owner Email", "Rating"];
+    const rows = filtered.map((s: any) => [
+      s.id,
+      `"${s.name || ''}"`,
+      `"${s.category || 'General'}"`,
+      `"${s.city || ''}"`,
+      s.isKycVerified ? "Verified" : "Pending",
+      `"${s.owner?.email || ''}"`,
+      s.averageRating || 0
+    ]);
+    const csvContent = "data:text/csv;charset=utf-8," 
+      + [headers.join(","), ...rows.map((r: any) => r.join(","))].join("\n");
+    const encodedUri = encodeURI(csvContent);
+    const link = document.createElement("a");
+    link.setAttribute("href", encodedUri);
+    link.setAttribute("download", "shops_export.csv");
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    toast.success("Export successful");
+  };
 
   return (
     <AdminLayout>
@@ -198,7 +250,7 @@ export default function ShopsPage() {
           <p className={s.pageSubtitle}>Manage and oversee all registered local businesses.</p>
         </div>
         <div style={{ display: "flex", gap: "8px" }}>
-          <button className={s.btnSecondary} id="shops-export" onClick={() => toast.success('Export started.')}>
+          <button className={s.btnSecondary} id="shops-export" onClick={handleExportCSV}>
             Export CSV
           </button>
           <button className={s.btnPrimary} id="shops-add" onClick={() => setAddOpen(true)}>
@@ -222,14 +274,38 @@ export default function ShopsPage() {
           />
         </div>
         <div className={s.toolbarActions}>
-          <button className={s.toolbarFilter} id="shops-filter-status">
-            <Filter size={13} />
-            Status
-          </button>
-          <button className={s.toolbarFilter} id="shops-filter-category">
-            <Filter size={13} />
-            Category
-          </button>
+          <select 
+            className={s.toolbarFilter} 
+            value={statusFilter} 
+            onChange={(e) => setStatusFilter(e.target.value)}
+            style={{ padding: "6px 12px", borderRadius: "6px", border: "1px solid var(--neutral-300)", fontSize: "13px", background: "white", cursor: "pointer" }}
+          >
+            <option value="ALL">All Status</option>
+            <option value="VERIFIED">Verified</option>
+            <option value="PENDING">Pending</option>
+          </select>
+          <select 
+            className={s.toolbarFilter} 
+            value={categoryFilter} 
+            onChange={(e) => setCategoryFilter(e.target.value)}
+            style={{ padding: "6px 12px", borderRadius: "6px", border: "1px solid var(--neutral-300)", fontSize: "13px", background: "white", cursor: "pointer" }}
+          >
+            <option value="ALL">All Categories</option>
+            {categories.map((cat: any) => (
+              <option key={cat.id} value={cat.id}>{cat.name}</option>
+            ))}
+          </select>
+          <select 
+            className={s.toolbarFilter} 
+            value={dateFilter} 
+            onChange={(e) => setDateFilter(e.target.value)}
+            style={{ padding: "6px 12px", borderRadius: "6px", border: "1px solid var(--neutral-300)", fontSize: "13px", background: "white", cursor: "pointer" }}
+          >
+            <option value="ALL">All Time</option>
+            <option value="LAST_7_DAYS">Last 7 Days</option>
+            <option value="LAST_30_DAYS">Last 30 Days</option>
+            <option value="THIS_YEAR">This Year</option>
+          </select>
         </div>
       </div>
 
@@ -322,13 +398,43 @@ export default function ShopsPage() {
 
         {/* Pagination */}
         <div className={s.pagination}>
-          <span className={s.paginationMeta}>Showing 1–{filtered.length} of {shops.length} shops</span>
+          <span className={s.paginationMeta}>
+            Showing {filtered.length === 0 ? 0 : (currentPage - 1) * meta.limit + 1}–{Math.min(currentPage * meta.limit, meta.total)} of {meta.total} shops
+          </span>
           <div className={s.paginationBtns}>
-            <button className={s.pgBtn} id="shops-prev" onClick={() => setCurrentPage(p => Math.max(1, p - 1))}><ChevronLeft size={14} /></button>
-            <button className={`${s.pgBtn} ${s.pgBtnActive}`} id="shops-pg-1">1</button>
-            <button className={s.pgBtn} id="shops-pg-2">2</button>
-            <button className={s.pgBtn} id="shops-pg-3">3</button>
-            <button className={s.pgBtn} id="shops-next" onClick={() => setCurrentPage(p => p + 1)}><ChevronRight size={14} /></button>
+            <button 
+              className={s.pgBtn} 
+              id="shops-prev" 
+              onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
+              disabled={currentPage === 1}
+              style={{ opacity: currentPage === 1 ? 0.5 : 1, cursor: currentPage === 1 ? 'not-allowed' : 'pointer' }}
+            >
+              <ChevronLeft size={14} />
+            </button>
+            
+            {Array.from({ length: meta.totalPages }, (_, i) => i + 1)
+              .filter(p => p === 1 || p === meta.totalPages || Math.abs(currentPage - p) <= 1)
+              .map((p, i, arr) => (
+                <React.Fragment key={p}>
+                  {i > 0 && arr[i - 1] !== p - 1 && <span style={{ padding: "0 8px", color: "var(--neutral-400)" }}>...</span>}
+                  <button 
+                    className={`${s.pgBtn} ${currentPage === p ? s.pgBtnActive : ''}`} 
+                    onClick={() => setCurrentPage(p)}
+                  >
+                    {p}
+                  </button>
+                </React.Fragment>
+              ))}
+
+            <button 
+              className={s.pgBtn} 
+              id="shops-next" 
+              onClick={() => setCurrentPage(p => Math.min(meta.totalPages, p + 1))}
+              disabled={currentPage === meta.totalPages || meta.totalPages === 0}
+              style={{ opacity: (currentPage === meta.totalPages || meta.totalPages === 0) ? 0.5 : 1, cursor: (currentPage === meta.totalPages || meta.totalPages === 0) ? 'not-allowed' : 'pointer' }}
+            >
+              <ChevronRight size={14} />
+            </button>
           </div>
         </div>
       </div>

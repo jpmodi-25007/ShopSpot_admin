@@ -40,9 +40,13 @@ export default function InfluencersPage() {
   const { data: categoriesData } = useSWR(`${API_URL}/categories`, fetcher);
   
   const influencers = data?.data || [];
+  const meta = data?.meta || { total: 0, page: 1, limit: 50, totalPages: 1 };
   const categories = Array.isArray(categoriesData) ? categoriesData : (categoriesData?.data || []);
 
   const [search, setSearch] = useState("");
+  const [statusFilter, setStatusFilter] = useState("ALL");
+  const [nicheFilter, setNicheFilter] = useState("ALL");
+  const [dateFilter, setDateFilter] = useState("ALL");
   const [isInviteOpen, setInviteOpen] = useState(false);
   const [inviteEmail, setInviteEmail] = useState("");
   const [inviteName, setInviteName] = useState("");
@@ -130,11 +134,31 @@ export default function InfluencersPage() {
     }
   };
 
-  const filtered = influencers.filter(
-    (c: { user?: { name?: string; email?: string; avatarUrl?: string }; platforms?: string[]; socialPlatform?: string }) =>
-      c.user?.name?.toLowerCase().includes(search.toLowerCase()) ||
-      c.socialPlatform?.toLowerCase().includes(search.toLowerCase())
-  );
+  const filtered = influencers.filter((c: any) => {
+    let matchStatus = true;
+    if (statusFilter !== "ALL") matchStatus = c.verificationStatus === statusFilter;
+    
+    let matchNiche = true;
+    if (nicheFilter !== "ALL") matchNiche = c.socialPlatform === nicheFilter;
+
+    let matchDate = true;
+    if (dateFilter !== "ALL" && c.createdAt) {
+      const joinDate = new Date(c.createdAt);
+      const now = new Date();
+      const diffTime = Math.abs(now.getTime() - joinDate.getTime());
+      const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+      
+      if (dateFilter === "LAST_7_DAYS") matchDate = diffDays <= 7;
+      if (dateFilter === "LAST_30_DAYS") matchDate = diffDays <= 30;
+      if (dateFilter === "THIS_YEAR") matchDate = joinDate.getFullYear() === now.getFullYear();
+    }
+
+    if (!search) return matchStatus && matchNiche && matchDate;
+    const searchLower = search.toLowerCase();
+    const matchName = c.user?.name?.toLowerCase().includes(searchLower) || false;
+    const matchDisplayName = c.displayName?.toLowerCase().includes(searchLower) || false;
+    return matchStatus && matchNiche && matchDate && (matchName || matchDisplayName);
+  });
 
   return (
     <AdminLayout>
@@ -167,12 +191,40 @@ export default function InfluencersPage() {
           />
         </div>
         <div className={s.toolbarActions}>
-          <button className={s.toolbarFilter} id="influencers-filter-status">
-            <Filter size={13} /> Status
-          </button>
-          <button className={s.toolbarFilter} id="influencers-filter-niche">
-            <Filter size={13} /> Niche
-          </button>
+          <select 
+            className={s.toolbarFilter} 
+            value={statusFilter} 
+            onChange={(e) => setStatusFilter(e.target.value)}
+            style={{ padding: "6px 12px", borderRadius: "6px", border: "1px solid var(--neutral-300)", fontSize: "13px", background: "white", cursor: "pointer" }}
+          >
+            <option value="ALL">All Status</option>
+            <option value="VERIFIED">Verified</option>
+            <option value="PENDING">Pending</option>
+            <option value="REJECTED">Rejected</option>
+          </select>
+          <select 
+            className={s.toolbarFilter} 
+            value={nicheFilter} 
+            onChange={(e) => setNicheFilter(e.target.value)}
+            style={{ padding: "6px 12px", borderRadius: "6px", border: "1px solid var(--neutral-300)", fontSize: "13px", background: "white", cursor: "pointer" }}
+          >
+            <option value="ALL">All Niches</option>
+            <option value="Instagram">Instagram</option>
+            <option value="YouTube">YouTube</option>
+            <option value="TikTok">TikTok</option>
+            <option value="Twitter">Twitter</option>
+          </select>
+          <select 
+            className={s.toolbarFilter} 
+            value={dateFilter} 
+            onChange={(e) => setDateFilter(e.target.value)}
+            style={{ padding: "6px 12px", borderRadius: "6px", border: "1px solid var(--neutral-300)", fontSize: "13px", background: "white", cursor: "pointer" }}
+          >
+            <option value="ALL">All Time</option>
+            <option value="LAST_7_DAYS">Last 7 Days</option>
+            <option value="LAST_30_DAYS">Last 30 Days</option>
+            <option value="THIS_YEAR">This Year</option>
+          </select>
         </div>
       </div>
 
@@ -255,12 +307,43 @@ export default function InfluencersPage() {
           )}
         </div>
         <div className={s.pagination}>
-          <span className={s.paginationMeta}>Showing 1–{filtered.length} of {influencers.length}</span>
+          <span className={s.paginationMeta}>
+            Showing {filtered.length === 0 ? 0 : (currentPage - 1) * meta.limit + 1}–{Math.min(currentPage * meta.limit, meta.total)} of {meta.total} influencers
+          </span>
           <div className={s.paginationBtns}>
-            <button className={s.pgBtn} id="inf-prev"><ChevronLeft size={14} /></button>
-            <button className={`${s.pgBtn} ${s.pgBtnActive}`} id="inf-pg-1">1</button>
-            <button className={s.pgBtn} id="inf-pg-2">2</button>
-            <button className={s.pgBtn} id="inf-next"><ChevronRight size={14} /></button>
+            <button 
+              className={s.pgBtn} 
+              id="inf-prev" 
+              onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
+              disabled={currentPage === 1}
+              style={{ opacity: currentPage === 1 ? 0.5 : 1, cursor: currentPage === 1 ? 'not-allowed' : 'pointer' }}
+            >
+              <ChevronLeft size={14} />
+            </button>
+            
+            {Array.from({ length: meta.totalPages }, (_, i) => i + 1)
+              .filter(p => p === 1 || p === meta.totalPages || Math.abs(currentPage - p) <= 1)
+              .map((p, i, arr) => (
+                <React.Fragment key={p}>
+                  {i > 0 && arr[i - 1] !== p - 1 && <span style={{ padding: "0 8px", color: "var(--neutral-400)" }}>...</span>}
+                  <button 
+                    className={`${s.pgBtn} ${currentPage === p ? s.pgBtnActive : ''}`} 
+                    onClick={() => setCurrentPage(p)}
+                  >
+                    {p}
+                  </button>
+                </React.Fragment>
+              ))}
+
+            <button 
+              className={s.pgBtn} 
+              id="inf-next" 
+              onClick={() => setCurrentPage(p => Math.min(meta.totalPages, p + 1))}
+              disabled={currentPage === meta.totalPages || meta.totalPages === 0}
+              style={{ opacity: (currentPage === meta.totalPages || meta.totalPages === 0) ? 0.5 : 1, cursor: (currentPage === meta.totalPages || meta.totalPages === 0) ? 'not-allowed' : 'pointer' }}
+            >
+              <ChevronRight size={14} />
+            </button>
           </div>
         </div>
       </div>

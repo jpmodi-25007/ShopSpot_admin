@@ -26,10 +26,16 @@ function severityBadge(severity: string) {
 }
 
 export default function ModerationPage() {
-  const { data, error, mutate } = useSWR(`${API_URL}/admin/reports?limit=50`, fetcher);
+  const [currentPage, setCurrentPage] = useState(1);
+  const { data, error, mutate } = useSWR(`${API_URL}/admin/reports?page=${currentPage}&limit=50`, fetcher);
   const { data: statsData } = useSWR(`${API_URL}/admin/reports/stats`, fetcher);
   
   const reports = data?.data || [];
+  const meta = data?.meta || { total: 0, page: 1, limit: 50, totalPages: 1 };
+
+  const [search, setSearch] = useState("");
+  const [statusFilter, setStatusFilter] = useState("ALL");
+  const [reasonFilter, setReasonFilter] = useState("ALL");
   
   const stats = [
     { label: "Total Flagged", value: statsData?.totalFlagged || 0, icon: ShieldAlert, color: "#F59E0B", bg: "var(--warning-100)" },
@@ -39,12 +45,20 @@ export default function ModerationPage() {
   ];
 
   const [search, setSearch] = useState("");
-  const filtered = reports.filter(
-    (r: { targetType?: string; status?: string; reporter?: { name?: string }; reason?: string; title?: string; shop?: { name?: string } }) =>
-      r.title?.toLowerCase().includes(search.toLowerCase()) ||
-      r.shop?.name?.toLowerCase().includes(search.toLowerCase()) ||
-      r.reason?.toLowerCase().includes(search.toLowerCase())
-  );
+  const filtered = reports.filter((r: { targetType?: string; status?: string; reporter?: { name?: string }; reason?: string; title?: string; shop?: { name?: string } }) => {
+    let matchStatus = true;
+    if (statusFilter !== "ALL") matchStatus = r.status === statusFilter;
+    
+    let matchReason = true;
+    if (reasonFilter !== "ALL") matchReason = r.reason === reasonFilter;
+
+    if (!search) return matchStatus && matchReason;
+    const searchLower = search.toLowerCase();
+    const matchTitle = r.title?.toLowerCase().includes(searchLower) || false;
+    const matchShop = r.shop?.name?.toLowerCase().includes(searchLower) || false;
+    const matchReasonText = r.reason?.toLowerCase().includes(searchLower) || false;
+    return matchStatus && matchReason && (matchTitle || matchShop || matchReasonText);
+  });
 
   const handleResolve = async (id: string, newStatus: string) => {
     try {
@@ -114,8 +128,29 @@ export default function ModerationPage() {
           />
         </div>
         <div className={s.toolbarActions}>
-          <button className={s.toolbarFilter} id="mod-filter-reason"><Filter size={13} /> Reason</button>
-          <button className={s.toolbarFilter} id="mod-filter-status"><Filter size={13} /> Status</button>
+          <select 
+            className={s.toolbarFilter} 
+            value={reasonFilter} 
+            onChange={(e) => setReasonFilter(e.target.value)}
+            style={{ padding: "6px 12px", borderRadius: "6px", border: "1px solid var(--neutral-300)", fontSize: "13px", background: "white", cursor: "pointer" }}
+          >
+            <option value="ALL">All Reasons</option>
+            <option value="SPAM">Spam</option>
+            <option value="INAPPROPRIATE">Inappropriate</option>
+            <option value="FRAUD">Fraud</option>
+          </select>
+          <select 
+            className={s.toolbarFilter} 
+            value={statusFilter} 
+            onChange={(e) => setStatusFilter(e.target.value)}
+            style={{ padding: "6px 12px", borderRadius: "6px", border: "1px solid var(--neutral-300)", fontSize: "13px", background: "white", cursor: "pointer" }}
+          >
+            <option value="ALL">All Status</option>
+            <option value="PENDING">Pending</option>
+            <option value="UNDER_REVIEW">Under Review</option>
+            <option value="RESOLVED">Resolved</option>
+            <option value="DISMISSED">Dismissed</option>
+          </select>
         </div>
       </div>
 
@@ -187,11 +222,43 @@ export default function ModerationPage() {
           </table>
         </div>
         <div className={s.pagination}>
-          <span className={s.paginationMeta}>Showing 1–{filtered.length} of {reports.length}</span>
+          <span className={s.paginationMeta}>
+            Showing {filtered.length === 0 ? 0 : (currentPage - 1) * meta.limit + 1}–{Math.min(currentPage * meta.limit, meta.total)} of {meta.total} reports
+          </span>
           <div className={s.paginationBtns}>
-            <button className={s.pgBtn} id="mod-prev"><ChevronLeft size={14} /></button>
-            <button className={`${s.pgBtn} ${s.pgBtnActive}`} id="mod-pg-1">1</button>
-            <button className={s.pgBtn} id="mod-next"><ChevronRight size={14} /></button>
+            <button 
+              className={s.pgBtn} 
+              id="mod-prev" 
+              onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
+              disabled={currentPage === 1}
+              style={{ opacity: currentPage === 1 ? 0.5 : 1, cursor: currentPage === 1 ? 'not-allowed' : 'pointer' }}
+            >
+              <ChevronLeft size={14} />
+            </button>
+            
+            {Array.from({ length: meta.totalPages }, (_, i) => i + 1)
+              .filter(p => p === 1 || p === meta.totalPages || Math.abs(currentPage - p) <= 1)
+              .map((p, i, arr) => (
+                <React.Fragment key={p}>
+                  {i > 0 && arr[i - 1] !== p - 1 && <span style={{ padding: "0 8px", color: "var(--neutral-400)" }}>...</span>}
+                  <button 
+                    className={`${s.pgBtn} ${currentPage === p ? s.pgBtnActive : ''}`} 
+                    onClick={() => setCurrentPage(p)}
+                  >
+                    {p}
+                  </button>
+                </React.Fragment>
+              ))}
+
+            <button 
+              className={s.pgBtn} 
+              id="mod-next" 
+              onClick={() => setCurrentPage(p => Math.min(meta.totalPages, p + 1))}
+              disabled={currentPage === meta.totalPages || meta.totalPages === 0}
+              style={{ opacity: (currentPage === meta.totalPages || meta.totalPages === 0) ? 0.5 : 1, cursor: (currentPage === meta.totalPages || meta.totalPages === 0) ? 'not-allowed' : 'pointer' }}
+            >
+              <ChevronRight size={14} />
+            </button>
           </div>
         </div>
       </div>

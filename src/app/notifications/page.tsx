@@ -1,8 +1,9 @@
 "use client";
 
 import React, { useState } from 'react';
-import { Bell, ShieldCheck, UserPlus, AlertTriangle, ArrowUpRight } from 'lucide-react';
+import { Bell, ShieldCheck, UserPlus, AlertTriangle, ArrowUpRight, BellOff } from 'lucide-react';
 import sharedStyles from '../../components/AdminLayout/shared.module.css';
+import styles from './notifications.module.css';
 import useSWR from 'swr';
 import { fetcher } from '@/lib/fetcher';
 import { API_URL } from '@/config/constants';
@@ -69,124 +70,106 @@ export default function NotificationsPage() {
       <header className={sharedStyles.header}>
         <div className={sharedStyles.headerLeft}>
           <h1 className={sharedStyles.pageTitle}>Notifications</h1>
-          <p className={sharedStyles.pageSubtitle}>Manage your system alerts and notifications</p>
+          <p className={sharedStyles.pageSubtitle}>Manage your system alerts and broadcast messages across Findivo.</p>
         </div>
         <div className={sharedStyles.headerActions}>
           <button className={sharedStyles.secondaryBtn} onClick={() => setShowBroadcastModal(true)}>
             <Bell size={18} />
             <span>Broadcast</span>
           </button>
-          <button className={sharedStyles.primaryBtn} onClick={handleMarkAllRead} disabled={isMarking}>
+          <button className={sharedStyles.primaryBtn} onClick={handleMarkAllRead} disabled={isMarking || notifications.length === 0}>
             <ShieldCheck size={18} />
             <span>{isMarking ? 'Marking...' : 'Mark All Read'}</span>
           </button>
         </div>
       </header>
 
-      <div className={sharedStyles.card}>
-        <div className={sharedStyles.cardHeader}>
-          <h2 className={sharedStyles.cardTitle}>Recent Notifications</h2>
-        </div>
-        <div style={{ padding: '0 24px 24px' }}>
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
-            {notifications.length === 0 ? (
-              <div style={{ padding: '24px 0', textAlign: 'center', color: '#6B7280' }}>
-                No notifications found.
-              </div>
-            ) : null}
-            {notifications.map((notif: any) => (
+      <div className={styles.notificationsContainer}>
+        {notifications.length === 0 ? (
+          <div className={styles.emptyState}>
+            <div className={styles.emptyIcon}>
+              <BellOff size={32} />
+            </div>
+            <h3 className={styles.emptyTitle}>You're all caught up!</h3>
+            <p className={styles.emptyDesc}>There are no new notifications at this time. Check back later for updates.</p>
+          </div>
+        ) : (
+          <div className={styles.notificationList}>
+            {notifications.map((notif: any, index: number) => (
               <div
                 key={notif.id}
-                style={{
-                  display: 'flex',
-                  alignItems: 'flex-start',
-                  padding: '16px',
-                  borderRadius: '12px',
-                  backgroundColor: notif.isRead ? '#FFFFFF' : '#F9FAFB',
-                  border: `1px solid ${notif.isRead ? '#F3F4F6' : '#E5E7EB'}`,
-                  transition: 'all 0.2s',
-                }}
+                className={`${styles.notificationCard} ${!notif.isRead ? styles.unread : ''}`}
+                style={{ animationDelay: `${index * 0.05}s` }}
               >
-                <div
-                  style={{
-                    backgroundColor: notif.type === 'SYSTEM' ? '#FFF7ED' : '#F0FDFA',
-                    padding: '12px',
-                    borderRadius: '12px',
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                  }}
-                >
-                  {notif.type === 'SYSTEM' ? <AlertTriangle size={20} color="#F97316" /> : <ShieldCheck size={20} color="#10B981" />}
+                <div className={`${styles.iconWrapper} ${notif.type === 'SYSTEM' ? styles.system : styles.success}`}>
+                  {notif.type === 'SYSTEM' ? <AlertTriangle size={22} /> : <ShieldCheck size={22} />}
                 </div>
-                <div style={{ marginLeft: '16px', flex: 1 }}>
-                  <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '4px' }}>
-                    <h4 style={{ margin: 0, fontSize: '15px', color: '#111827', fontWeight: 600 }}>
-                      {notif.title}
-                    </h4>
-                    <span style={{ fontSize: '12px', color: '#6B7280' }}>
-                      {new Date(notif.createdAt).toLocaleDateString()}
+                
+                <div className={styles.contentWrapper}>
+                  <div className={styles.headerRow}>
+                    <h4 className={styles.title}>{notif.title}</h4>
+                    <span className={styles.date}>
+                      {new Date(notif.createdAt).toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' })}
                     </span>
                   </div>
-                  <p style={{ margin: 0, fontSize: '14px', color: '#4B5563', lineHeight: '1.5' }}>
+                  <p className={styles.bodyText}>
                     {notif.body || notif.message}
                   </p>
                 </div>
+
                 {!notif.isRead && (
-                  <div style={{ marginLeft: '16px', marginTop: '8px' }}>
-                    <div style={{ width: '8px', height: '8px', borderRadius: '50%', backgroundColor: '#0F766E' }} />
-                  </div>
+                  <div className={styles.unreadDot} />
                 )}
               </div>
             ))}
           </div>
-        </div>
+        )}
       </div>
 
       {showBroadcastModal && (
-        <div style={{ position: 'fixed', inset: 0, backgroundColor: 'rgba(0,0,0,0.5)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 50 }}>
-          <div style={{ backgroundColor: 'white', padding: '24px', borderRadius: '12px', width: '400px', maxWidth: '90%' }}>
-            <h2 style={{ marginTop: 0, marginBottom: '16px', fontSize: '18px', fontWeight: 600 }}>Broadcast Notification</h2>
-            <form onSubmit={handleBroadcast} style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
-              <div>
-                <label style={{ display: 'block', marginBottom: '8px', fontSize: '14px', fontWeight: 500 }}>Target Audience</label>
+        <div className={styles.modalBackdrop}>
+          <div className={styles.modalContent}>
+            <h2 className={styles.modalTitle}>Broadcast Message</h2>
+            <form onSubmit={handleBroadcast}>
+              <div className={styles.formGroup}>
+                <label className={styles.formLabel}>Target Audience</label>
                 <select 
+                  className={styles.formSelect}
                   value={broadcastData.targetRole}
                   onChange={e => setBroadcastData(prev => ({ ...prev, targetRole: e.target.value }))}
-                  style={{ width: '100%', padding: '10px', borderRadius: '8px', border: '1px solid #D1D5DB' }}
                 >
-                  <option value="ALL">Everyone</option>
-                  <option value="SHOPKEEPER">Shopkeepers</option>
-                  <option value="CUSTOMER">Customers</option>
-                  <option value="INFLUENCER">Influencers</option>
+                  <option value="ALL">Everyone on Findivo</option>
+                  <option value="SHOPKEEPER">All Retailers</option>
+                  <option value="CUSTOMER">All Customers</option>
+                  <option value="INFLUENCER">All Influencers</option>
                 </select>
               </div>
-              <div>
-                <label style={{ display: 'block', marginBottom: '8px', fontSize: '14px', fontWeight: 500 }}>Title</label>
+              <div className={styles.formGroup}>
+                <label className={styles.formLabel}>Notification Title</label>
                 <input 
                   required
                   type="text" 
+                  className={styles.formInput}
                   value={broadcastData.title}
                   onChange={e => setBroadcastData(prev => ({ ...prev, title: e.target.value }))}
-                  style={{ width: '100%', padding: '10px', borderRadius: '8px', border: '1px solid #D1D5DB' }}
-                  placeholder="Notification title..."
+                  placeholder="e.g. Scheduled Maintenance Update"
                 />
               </div>
-              <div>
-                <label style={{ display: 'block', marginBottom: '8px', fontSize: '14px', fontWeight: 500 }}>Message Body</label>
+              <div className={styles.formGroup}>
+                <label className={styles.formLabel}>Message Content</label>
                 <textarea 
                   required
+                  className={styles.formTextarea}
                   value={broadcastData.body}
                   onChange={e => setBroadcastData(prev => ({ ...prev, body: e.target.value }))}
-                  style={{ width: '100%', padding: '10px', borderRadius: '8px', border: '1px solid #D1D5DB', minHeight: '100px' }}
-                  placeholder="What do you want to say?"
+                  placeholder="Type the message you want to broadcast..."
                 />
               </div>
-              <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '12px', marginTop: '8px' }}>
-                <button type="button" onClick={() => setShowBroadcastModal(false)} style={{ padding: '10px 16px', borderRadius: '8px', border: '1px solid #D1D5DB', backgroundColor: 'white', cursor: 'pointer' }}>
+              <div className={styles.modalActions}>
+                <button type="button" onClick={() => setShowBroadcastModal(false)} className={styles.cancelBtn}>
                   Cancel
                 </button>
-                <button type="submit" disabled={isBroadcasting} style={{ padding: '10px 16px', borderRadius: '8px', border: 'none', backgroundColor: '#0F766E', color: 'white', cursor: 'pointer', fontWeight: 500 }}>
+                <button type="submit" disabled={isBroadcasting} className={styles.submitBtn}>
                   {isBroadcasting ? 'Sending...' : 'Send Broadcast'}
                 </button>
               </div>

@@ -23,10 +23,14 @@ function statusClass(isActive: boolean) {
 
 export default function UsersPage() {
   const router = useRouter();
-  const { data, error, mutate } = useSWR(`${API_URL}/admin/users?limit=50`, fetcher);
+  const [currentPage, setCurrentPage] = useState(1);
+  const { data, error, mutate } = useSWR(`${API_URL}/admin/users?page=${currentPage}&limit=50`, fetcher);
   const users = data?.data || [];
+  const meta = data?.meta || { total: 0, page: 1, limit: 50, totalPages: 1 };
 
   const [search, setSearch] = useState("");
+  const [statusFilter, setStatusFilter] = useState("ALL");
+  const [dateFilter, setDateFilter] = useState("ALL");
   const [isInviteOpen, setInviteOpen] = useState(false);
   const [editUserId, setEditUserId] = useState<string | null>(null);
   const [deleteUserId, setDeleteUserId] = useState<string | null>(null);
@@ -147,11 +151,56 @@ export default function UsersPage() {
     }
   };
 
-  const filtered = users.filter(
-    (u: { name?: string; email?: string }) =>
-      u.name?.toLowerCase().includes(search.toLowerCase()) ||
-      u.email?.toLowerCase().includes(search.toLowerCase())
-  );
+  const filtered = users.filter((u: { name?: string; email?: string; isActive?: boolean; createdAt?: string }) => {
+    let matchStatus = true;
+    if (statusFilter === "ACTIVE") matchStatus = u.isActive === true;
+    if (statusFilter === "SUSPENDED") matchStatus = u.isActive === false;
+    
+    let matchDate = true;
+    if (dateFilter !== "ALL" && u.createdAt) {
+      const joinDate = new Date(u.createdAt);
+      const now = new Date();
+      const diffTime = Math.abs(now.getTime() - joinDate.getTime());
+      const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+      
+      if (dateFilter === "LAST_7_DAYS") matchDate = diffDays <= 7;
+      if (dateFilter === "LAST_30_DAYS") matchDate = diffDays <= 30;
+      if (dateFilter === "THIS_YEAR") matchDate = joinDate.getFullYear() === now.getFullYear();
+    }
+    
+    if (!search) return matchStatus && matchDate;
+    const searchLower = search.toLowerCase();
+    const matchName = u.name?.toLowerCase().includes(searchLower) || false;
+    const matchEmail = u.email?.toLowerCase().includes(searchLower) || false;
+    return matchStatus && matchDate && (matchName || matchEmail);
+  });
+
+  const handleExportCSV = () => {
+    if (filtered.length === 0) {
+      toast.error("No data to export");
+      return;
+    }
+    const headers = ["ID", "Name", "Email", "Role", "Mobile", "Status", "Joined"];
+    const rows = filtered.map((u: any) => [
+      u.id,
+      `"${u.name || ''}"`,
+      `"${u.email || ''}"`,
+      u.role,
+      `"${u.mobile || ''}"`,
+      u.isActive ? "Active" : "Suspended",
+      new Date(u.createdAt).toISOString()
+    ]);
+    const csvContent = "data:text/csv;charset=utf-8," 
+      + [headers.join(","), ...rows.map((r: any) => r.join(","))].join("\n");
+    const encodedUri = encodeURI(csvContent);
+    const link = document.createElement("a");
+    link.setAttribute("href", encodedUri);
+    link.setAttribute("download", "users_export.csv");
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    toast.success("Export successful");
+  };
 
   return (
     <AdminLayout>
@@ -162,7 +211,7 @@ export default function UsersPage() {
           <p className={s.pageSubtitle}>Overview and administration of all platform users.</p>
         </div>
         <div style={{ display: "flex", gap: "8px" }}>
-          <button className={s.btnSecondary} id="users-export" onClick={() => toast.success('Export started.')}>
+          <button className={s.btnSecondary} id="users-export" onClick={handleExportCSV}>
             <Download size={14} />
             Export CSV
           </button>
@@ -187,12 +236,27 @@ export default function UsersPage() {
           />
         </div>
         <div className={s.toolbarActions}>
-          <button className={s.toolbarFilter} id="users-filter-status">
-            <Filter size={13} /> Status
-          </button>
-          <button className={s.toolbarFilter} id="users-filter-date">
-            <Filter size={13} /> Join Date
-          </button>
+          <select 
+            className={s.toolbarFilter} 
+            value={statusFilter} 
+            onChange={(e) => setStatusFilter(e.target.value)}
+            style={{ padding: "6px 12px", borderRadius: "6px", border: "1px solid var(--neutral-300)", fontSize: "13px", background: "white", cursor: "pointer" }}
+          >
+            <option value="ALL">All Status</option>
+            <option value="ACTIVE">Active</option>
+            <option value="SUSPENDED">Suspended</option>
+          </select>
+          <select 
+            className={s.toolbarFilter} 
+            value={dateFilter} 
+            onChange={(e) => setDateFilter(e.target.value)}
+            style={{ padding: "6px 12px", borderRadius: "6px", border: "1px solid var(--neutral-300)", fontSize: "13px", background: "white", cursor: "pointer" }}
+          >
+            <option value="ALL">All Time</option>
+            <option value="LAST_7_DAYS">Last 7 Days</option>
+            <option value="LAST_30_DAYS">Last 30 Days</option>
+            <option value="THIS_YEAR">This Year</option>
+          </select>
         </div>
       </div>
 
@@ -276,12 +340,43 @@ export default function UsersPage() {
           )}
         </div>
         <div className={s.pagination}>
-          <span className={s.paginationMeta}>Showing 1–{filtered.length} of {users.length} users</span>
+          <span className={s.paginationMeta}>
+            Showing {filtered.length === 0 ? 0 : (currentPage - 1) * meta.limit + 1}–{Math.min(currentPage * meta.limit, meta.total)} of {meta.total} users
+          </span>
           <div className={s.paginationBtns}>
-            <button className={s.pgBtn} id="users-prev"><ChevronLeft size={14} /></button>
-            <button className={`${s.pgBtn} ${s.pgBtnActive}`} id="users-pg-1">1</button>
-            <button className={s.pgBtn} id="users-pg-2">2</button>
-            <button className={s.pgBtn} id="users-next"><ChevronRight size={14} /></button>
+            <button 
+              className={s.pgBtn} 
+              id="users-prev" 
+              onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
+              disabled={currentPage === 1}
+              style={{ opacity: currentPage === 1 ? 0.5 : 1, cursor: currentPage === 1 ? 'not-allowed' : 'pointer' }}
+            >
+              <ChevronLeft size={14} />
+            </button>
+            
+            {Array.from({ length: meta.totalPages }, (_, i) => i + 1)
+              .filter(p => p === 1 || p === meta.totalPages || Math.abs(currentPage - p) <= 1)
+              .map((p, i, arr) => (
+                <React.Fragment key={p}>
+                  {i > 0 && arr[i - 1] !== p - 1 && <span style={{ padding: "0 8px", color: "var(--neutral-400)" }}>...</span>}
+                  <button 
+                    className={`${s.pgBtn} ${currentPage === p ? s.pgBtnActive : ''}`} 
+                    onClick={() => setCurrentPage(p)}
+                  >
+                    {p}
+                  </button>
+                </React.Fragment>
+              ))}
+
+            <button 
+              className={s.pgBtn} 
+              id="users-next" 
+              onClick={() => setCurrentPage(p => Math.min(meta.totalPages, p + 1))}
+              disabled={currentPage === meta.totalPages || meta.totalPages === 0}
+              style={{ opacity: (currentPage === meta.totalPages || meta.totalPages === 0) ? 0.5 : 1, cursor: (currentPage === meta.totalPages || meta.totalPages === 0) ? 'not-allowed' : 'pointer' }}
+            >
+              <ChevronRight size={14} />
+            </button>
           </div>
         </div>
       </div>
