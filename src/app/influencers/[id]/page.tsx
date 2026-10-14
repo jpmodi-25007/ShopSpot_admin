@@ -68,10 +68,29 @@ export default function InfluencerDetailPage({ params }: { params: Promise<{ id:
 
   const handleApprove = () => handleVerify("VERIFIED");
   const handleReject = () => handleVerify("REJECTED");
-  const handleRequestInfo = () => {
-    setStatus("Info Requested");
-    setBadgeClass(s.statusPending);
-    // TODO: Send email endpoint integration
+  const handleRequestInfo = async () => {
+    try {
+      const token = localStorage.getItem("accessToken");
+      const res = await fetch(`${API_URL}/admin/influencers/${id}/verify`, {
+        method: "POST",
+        headers: { 
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`
+        },
+        body: JSON.stringify({ status: "PENDING", note: adminNotes || "Please provide additional verification documents." })
+      });
+      if (res.ok) {
+        setStatus("Info Requested");
+        setBadgeClass(s.statusPending);
+        mutate();
+        toast.success("Information request sent to influencer");
+      } else {
+        const err = await res.json();
+        toast.error(err.message || "Failed to send information request");
+      }
+    } catch (e: any) {
+      toast.error(e.message || "Failed to send information request");
+    }
   };
 
   return (
