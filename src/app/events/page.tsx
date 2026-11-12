@@ -71,7 +71,10 @@ export default function EventsPage() {
 
       const res = await fetch(`${API_URL}/events${editingId ? `/${editingId}` : ''}`, {
         method: editingId ? 'PATCH' : 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${localStorage.getItem('accessToken')}`,
+        },
         body: JSON.stringify(payload)
       });
       
@@ -95,7 +98,10 @@ export default function EventsPage() {
     if (!window.confirm("Are you sure you want to delete this event?")) return;
     
     try {
-      const res = await fetch(`${API_URL}/events/${id}`, { method: 'DELETE' });
+      const res = await fetch(`${API_URL}/events/${id}`, {
+        method: 'DELETE',
+        headers: { Authorization: `Bearer ${localStorage.getItem('accessToken')}` },
+      });
       if (!res.ok) throw new Error("Delete failed");
       
       toast.success("Event deleted");

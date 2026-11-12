@@ -1,7 +1,7 @@
 /* eslint-disable @next/next/no-img-element */
 "use client";
 
-import React, { useState } from "react";
+import React, { useEffect, useState } from "react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import {
@@ -49,6 +49,16 @@ export default function AdminLayout({ children }: AdminLayoutProps) {
   const router = useRouter();
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [showNotifications, setShowNotifications] = useState(false);
+
+  // Client-side route guard: the API enforces authorization itself, this just
+  // sends visitors without an admin session to the login page.
+  useEffect(() => {
+    const token = localStorage.getItem("accessToken");
+    const role = localStorage.getItem("userRole");
+    if (!token || role !== "ADMIN") {
+      router.replace("/login");
+    }
+  }, [router]);
 
   const handleLogout = () => {
     localStorage.removeItem("accessToken");

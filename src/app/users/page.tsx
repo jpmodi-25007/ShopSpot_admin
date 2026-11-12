@@ -140,7 +140,7 @@ export default function UsersPage() {
           "Content-Type": "application/json",
           Authorization: `Bearer ${token}`
         },
-        body: JSON.stringify({ isSuspended: editStatus === "Suspended", reason: "Admin UI action" })
+        body: JSON.stringify({ isActive: editStatus !== "Suspended" })
       });
       if (res.ok) {
         setEditUserId(null);

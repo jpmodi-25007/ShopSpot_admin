@@ -10,7 +10,7 @@ export default function LoginScreen() {
   const router = useRouter();
   const [showPassword, setShowPassword] = useState(false);
   const [email, setEmail] = useState("admin@findivo.com");
-  const [password, setPassword] = useState("password");
+  const [password, setPassword] = useState("");
 
   const [error, setError] = useState("");
 

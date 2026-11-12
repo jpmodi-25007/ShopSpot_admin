@@ -58,7 +58,7 @@ export default function AnalyticsScreen() {
           <h1 className={s.pageTitle}>Platform Analytics</h1>
           <p className={s.pageSubtitle}>Overview of platform performance and engagement.</p>
         </div>
-        <div style={{ display: "flex", gap: "8px", alignItems: "center" }}>
+        <div style={{ display: "flex", gap: "8px", alignItems: "center", flexWrap: "wrap" }}>
           <div className={styles.dateToggle}>
             {['Today', 'Week', 'Month', 'Custom'].map(tab => (
               <button
