@@ -1,68 +1,67 @@
 "use client";
 
-import React, { useState } from "react";
+import React, { useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import AdminLayout from "@/components/AdminLayout/AdminLayout";
 import {
   ChevronLeft, MapPin, ExternalLink, Image, Video,
-  CheckCircle2, AlertTriangle, FileText, Check, MessageSquare, X
+  CheckCircle2, FileText, Check, MessageSquare, X
 } from "lucide-react";
 import useSWR from "swr";
 import { fetcher } from "@/lib/fetcher";
 import { API_URL } from "@/config/constants";
 import s from "../../../components/AdminLayout/shared.module.css";
 import toast from "react-hot-toast";
+import { apiPost, apiPut } from "@/lib/api";
+import { revalidateAdminSummary } from "@/lib/revalidate";
 
 export default function InfluencerDetailPage({ params }: { params: Promise<{ id: string }> }) {
   const router = useRouter();
   const { id } = React.use(params);
   const [isUpdating, setIsUpdating] = useState(false);
   const [adminNotes, setAdminNotes] = useState("");
-  const { data: influencer, error, mutate } = useSWR(`${API_URL}/admin/influencers/${id}`, fetcher);
+  const { data: influencer, mutate } = useSWR(`${API_URL}/admin/influencers/${id}`, fetcher, {
+    onSuccess: (data) => setAdminNotes(data?.adminNote || ""),
+  });
 
-  const [status, setStatus] = useState("Pending Review");
-  const [badgeClass, setBadgeClass] = useState(s.statusPending);
-
-  const handleNotesSave = () => {
-    toast.success("Admin notes saved successfully");
+  const handleNotesSave = async () => {
+    const userId = influencer?.userId || influencer?.user?.id;
+    if (!userId) {
+      toast.error("Cannot save notes: user id missing");
+      return;
+    }
+    try {
+      setIsUpdating(true);
+      await apiPut(`/admin/users/${userId}/notes`, { note: adminNotes });
+      toast.success("Admin notes saved");
+      mutate();
+    } catch (e: unknown) {
+      toast.error((e as Error).message);
+    } finally {
+      setIsUpdating(false);
+    }
   };
 
-  React.useEffect(() => {
-    if (influencer?.verificationStatus) {
-      if (influencer.verificationStatus === "VERIFIED") {
-        setStatus("Verified");
-        setBadgeClass(s.statusActive);
-      } else if (influencer.verificationStatus === "REJECTED") {
-        setStatus("Rejected");
-        setBadgeClass(s.statusSuspended);
-      } else {
-        setStatus("Pending Review");
-        setBadgeClass(s.statusPending);
-      }
-    }
+  const { status, badgeClass } = useMemo(() => {
+    const v = influencer?.verificationStatus;
+    if (v === "VERIFIED") return { status: "Verified", badgeClass: s.statusActive };
+    if (v === "REJECTED") return { status: "Rejected", badgeClass: s.statusSuspended };
+    return { status: "Pending Review", badgeClass: s.statusPending };
   }, [influencer?.verificationStatus]);
 
-  const handleVerify = async (newStatus: string) => {
+  const handleVerify = async (newStatus: string, note?: string) => {
     try {
-      const token = localStorage.getItem("accessToken");
-      const res = await fetch(`${API_URL}/admin/influencers/${id}/verify`, {
-        method: "POST",
-        headers: { 
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${token}`
-        },
-        body: JSON.stringify({ status: newStatus })
+      setIsUpdating(true);
+      await apiPost(`/admin/influencers/${id}/verify`, {
+        status: newStatus,
+        ...(note ? { note } : {}),
       });
-      if (res.ok) {
-        mutate();
-        toast.success(`Application marked as ${newStatus}`);
-      } else {
-        const err = await res.json();
-        toast.error(err.message || "Failed to update verification status");
-      }
-    } catch (e: any) {
-      toast.error(e.message || "Failed to update verification status");
-      console.error(e);
+      await Promise.all([mutate(), revalidateAdminSummary()]);
+      toast.success(`Application marked as ${newStatus}`);
+    } catch (e: unknown) {
+      toast.error((e as Error).message || "Failed to update verification status");
+    } finally {
+      setIsUpdating(false);
     }
   };
 
@@ -70,26 +69,36 @@ export default function InfluencerDetailPage({ params }: { params: Promise<{ id:
   const handleReject = () => handleVerify("REJECTED");
   const handleRequestInfo = async () => {
     try {
-      const token = localStorage.getItem("accessToken");
-      const res = await fetch(`${API_URL}/admin/influencers/${id}/verify`, {
-        method: "POST",
-        headers: { 
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${token}`
-        },
-        body: JSON.stringify({ status: "PENDING", note: adminNotes || "Please provide additional verification documents." })
+      setIsUpdating(true);
+      await apiPost(`/admin/influencers/${id}/verify`, {
+        status: "PENDING",
+        note: adminNotes || "Please provide additional verification documents.",
       });
-      if (res.ok) {
-        setStatus("Info Requested");
-        setBadgeClass(s.statusPending);
-        mutate();
-        toast.success("Information request sent to influencer");
-      } else {
-        const err = await res.json();
-        toast.error(err.message || "Failed to send information request");
-      }
-    } catch (e: any) {
-      toast.error(e.message || "Failed to send information request");
+      await Promise.all([mutate(), revalidateAdminSummary()]);
+      toast.success("Information request sent to influencer");
+    } catch (e: unknown) {
+      toast.error((e as Error).message || "Failed to send information request");
+    } finally {
+      setIsUpdating(false);
+    }
+  };
+
+  const handleSuspend = async () => {
+    const userId = influencer?.userId || influencer?.user?.id;
+    if (!userId) {
+      toast.error("Cannot suspend: user id missing");
+      return;
+    }
+    try {
+      setIsUpdating(true);
+      const nextActive = influencer?.user?.isActive === false;
+      await apiPost(`/admin/users/${userId}/suspend`, { isActive: nextActive });
+      toast.success(nextActive ? "Influencer reactivated" : "Influencer suspended");
+      mutate();
+    } catch (e: unknown) {
+      toast.error((e as Error).message);
+    } finally {
+      setIsUpdating(false);
     }
   };
 
@@ -112,7 +121,7 @@ export default function InfluencerDetailPage({ params }: { params: Promise<{ id:
         </span>
       </div>
 
-      <div style={{ display: "grid", gridTemplateColumns: "300px 1fr 300px", gap: 24 }}>
+      <div className={s.detailGrid3}>
         
         {/* Left Panel: Profile */}
         <div style={{ display: "flex", flexDirection: "column", gap: 24 }}>
@@ -187,7 +196,7 @@ export default function InfluencerDetailPage({ params }: { params: Promise<{ id:
               <span style={{ fontSize: 12, color: "var(--neutral-500)" }}>API Sync: 2 hrs ago</span>
             </div>
             
-            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16 }}>
+            <div className={s.formGrid2}>
               {/* Followers Card */}
               <div style={{ padding: 16, borderRadius: 12, border: "1px solid var(--neutral-200)", background: "var(--neutral-50)" }}>
                 <div style={{ fontSize: 12, color: "var(--neutral-500)", fontWeight: 600, textTransform: "uppercase", marginBottom: 12 }}>Total Campaigns</div>
@@ -214,7 +223,7 @@ export default function InfluencerDetailPage({ params }: { params: Promise<{ id:
 
           <div className={s.card} style={{ padding: 24 }}>
             <h3 className={s.cardTitle} style={{ marginBottom: 16 }}>Submitted Proof</h3>
-            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16 }}>
+            <div className={s.formGrid2}>
               <div style={{ borderRadius: 12, overflow: "hidden", border: "1px solid var(--neutral-200)" }}>
                 <img 
                   src="https://images.unsplash.com/photo-1551288049-bebda4e38f71?q=80&w=400&auto=format&fit=crop" 
@@ -262,14 +271,17 @@ export default function InfluencerDetailPage({ params }: { params: Promise<{ id:
             </div>
 
             <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
-              <button className={s.btnPrimary} style={{ width: "100%", padding: "10px", justifyContent: "center" }} onClick={handleApprove}>
+              <button className={s.btnPrimary} style={{ width: "100%", padding: "10px", justifyContent: "center" }} onClick={handleApprove} disabled={isUpdating}>
                 <Check size={16} /> Approve Verification
               </button>
-              <button className={s.btnSecondary} style={{ width: "100%", padding: "10px", justifyContent: "center" }} onClick={handleRequestInfo}>
+              <button className={s.btnSecondary} style={{ width: "100%", padding: "10px", justifyContent: "center" }} onClick={handleRequestInfo} disabled={isUpdating}>
                 <MessageSquare size={16} /> Request More Info
               </button>
-              <button className={`${s.btnSecondary} ${s.btnDanger}`} style={{ width: "100%", padding: "10px", justifyContent: "center" }} onClick={handleReject}>
+              <button className={`${s.btnSecondary} ${s.btnDanger}`} style={{ width: "100%", padding: "10px", justifyContent: "center" }} onClick={handleReject} disabled={isUpdating}>
                 <X size={16} /> Reject Application
+              </button>
+              <button className={s.btnSecondary} style={{ width: "100%", padding: "10px", justifyContent: "center" }} onClick={handleSuspend} disabled={isUpdating}>
+                {influencer?.user?.isActive === false ? "Reactivate Account" : "Suspend Account"}
               </button>
             </div>
           </div>

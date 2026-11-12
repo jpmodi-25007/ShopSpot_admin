@@ -7,7 +7,7 @@ import {
   Download, RefreshCw,
 } from "lucide-react";
 import {
-  LineChart, Line, XAxis, YAxis, CartesianGrid,
+  XAxis, YAxis, CartesianGrid,
   Tooltip, ResponsiveContainer, Area, AreaChart,
 } from "recharts";
 import AdminLayout from "@/components/AdminLayout/AdminLayout";
@@ -15,6 +15,9 @@ import styles from "./dashboard.module.css";
 import useSWR from "swr";
 import { fetcher } from "@/lib/fetcher";
 import { API_URL } from "@/config/constants";
+import { apiGet, apiPost } from "@/lib/api";
+import { downloadCsv } from "@/lib/csv";
+import toast from "react-hot-toast";
 import { useRouter } from "next/navigation";
 
 export default function Dashboard() {
@@ -39,12 +42,51 @@ export default function Dashboard() {
     avgDiscount: 0
   };
 
+  const [busy, setBusy] = React.useState(false);
+
+  const handleDashboardExport = async () => {
+    try {
+      setBusy(true);
+      const stats = await apiGet<Record<string, unknown>>("/admin/dashboard");
+      const rows: unknown[][] = [];
+      for (const [key, value] of Object.entries(stats)) {
+        if (value === null || typeof value === "object") continue;
+        rows.push([key, value]);
+      }
+      downloadCsv(`dashboard-${new Date().toISOString().slice(0, 10)}.csv`, ["Metric", "Value"], rows);
+      toast.success("Dashboard exported");
+    } catch (e: unknown) {
+      toast.error((e as Error).message || "Export failed");
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const handleQueueAction = async (shopId: string, approve: boolean) => {
+    try {
+      setBusy(true);
+      if (approve) {
+        await apiPost(`/admin/shops/${shopId}/verify`, { isGstVerified: true, isKycVerified: true });
+        toast.success("Shop verified");
+      } else {
+        // Decline = leave unverified but keep ACTIVE; no destructive delete from the queue.
+        await apiPost(`/admin/shops/${shopId}/verify`, { isGstVerified: false, isKycVerified: false });
+        toast.success("Marked as pending");
+      }
+      mutate();
+    } catch (e: unknown) {
+      toast.error((e as Error).message);
+    } finally {
+      setBusy(false);
+    }
+  };
+
   return (
     <AdminLayout>
       {/* Page Header */}
       <div className={styles.header}>
         <div className={styles.headerLeft}>
-          <p className={styles.greeting}>{greeting}, Alex 👋</p>
+          <p className={styles.greeting}>{greeting} 👋</p>
           <h1 className={styles.title}>Dashboard</h1>
           <p className={styles.subtitle}>Here&apos;s what&apos;s happening across the platform today.</p>
         </div>
@@ -53,7 +95,7 @@ export default function Dashboard() {
             <RefreshCw size={14} />
             Refresh
           </button>
-          <button className={styles.btnPrimary} id="dashboard-export">
+          <button className={styles.btnPrimary} id="dashboard-export" onClick={handleDashboardExport} disabled={busy}>
             <Download size={14} />
             Export
           </button>
@@ -99,7 +141,7 @@ export default function Dashboard() {
               <DollarSign size={18} />
             </div>
           </div>
-          <div className={styles.metricValue}>{isLoading ? "..." : `$${dashboardData.platformRevenue.toLocaleString()}`}</div>
+          <div className={styles.metricValue}>{isLoading ? "..." : `₹${dashboardData.platformRevenue.toLocaleString()}`}</div>
           <div className={`${styles.metricTrend} ${styles.trendUp}`}>
             <ArrowUpRight size={14} />
             <span>Total Delivered</span>
@@ -184,7 +226,7 @@ export default function Dashboard() {
             <span className={styles.badge}>{dashboardData.verificationQueue.length} Pending</span>
           </div>
           <div className={styles.requestList}>
-            {dashboardData.verificationQueue.map((req: { name: string; location: string; type: string }, i: number) => (
+            {dashboardData.verificationQueue.map((req: { id?: string; name: string; location: string; type: string }, i: number) => (
               <div key={i} className={styles.requestItem}>
                 <div className={styles.requestHeader}>
                   <div className={styles.requestInfo}>
@@ -193,8 +235,8 @@ export default function Dashboard() {
                   </div>
                 </div>
                 <div className={styles.requestActions}>
-                  <button className={styles.btnApprove} id={`approve-${i}`}>Approve</button>
-                  <button className={styles.btnReject} id={`reject-${i}`}>Reject</button>
+                  <button className={styles.btnApprove} id={`approve-${i}`} disabled={busy || !req.id} onClick={() => req.id && handleQueueAction(req.id, true)}>Approve</button>
+                  <button className={styles.btnReject} id={`reject-${i}`} disabled={busy || !req.id} onClick={() => req.id && handleQueueAction(req.id, false)}>Reject</button>
                 </div>
               </div>
             ))}

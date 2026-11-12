@@ -12,6 +12,10 @@ import { fetcher } from "@/lib/fetcher";
 import s from "../../components/AdminLayout/shared.module.css";
 import localStyles from "./moderation.module.css";
 import { API_URL } from "@/config/constants";
+import { apiPost, buildQuery } from "@/lib/api";
+import { useDebounce } from "@/lib/useDebounce";
+import { revalidateAdminSummary } from "@/lib/revalidate";
+import toast from "react-hot-toast";
 
 
 
@@ -27,55 +31,85 @@ function severityBadge(severity: string) {
 
 export default function ModerationPage() {
   const [currentPage, setCurrentPage] = useState(1);
-  const { data, error, mutate } = useSWR(`${API_URL}/admin/reports?page=${currentPage}&limit=50`, fetcher);
-  const { data: statsData } = useSWR(`${API_URL}/admin/reports/stats`, fetcher);
-  
-  const reports = data?.data || [];
-  const meta = data?.meta || { total: 0, page: 1, limit: 50, totalPages: 1 };
-
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState("ALL");
   const [reasonFilter, setReasonFilter] = useState("ALL");
-  
+  const [selected, setSelected] = useState<string[]>([]);
+  const [busy, setBusy] = useState(false);
+  const debouncedSearch = useDebounce(search.trim(), 350);
+
+  const query = buildQuery({
+    page: currentPage,
+    limit: 50,
+    search: debouncedSearch || undefined,
+    status: statusFilter,
+    reason: reasonFilter,
+  });
+  const { data, error, mutate, isLoading } = useSWR(`${API_URL}/admin/reports${query}`, fetcher);
+  const { data: statsData, mutate: mutateStats } = useSWR(`${API_URL}/admin/reports/stats`, fetcher);
+
+  const reports = data?.data || [];
+  const meta = data?.meta || { total: 0, page: 1, limit: 50, totalPages: 1 };
+
   const stats = [
     { label: "Total Flagged", value: statsData?.totalFlagged || 0, icon: ShieldAlert, color: "#F59E0B", bg: "var(--warning-100)" },
     { label: "Under Review", value: statsData?.underReview || 0, icon: Clock, color: "#3B82F6", bg: "var(--info-100)" },
     { label: "Resolved", value: statsData?.resolved || 0, icon: CheckCircle, color: "#22C55E", bg: "var(--success-100)" },
-    { label: "Pending", value: (statsData?.totalFlagged || 0) - (statsData?.resolved || 0), icon: XCircle, color: "#EF4444", bg: "var(--error-100)" },
+    { label: "Pending", value: Math.max(0, (statsData?.totalFlagged || 0) - (statsData?.resolved || 0)), icon: XCircle, color: "#EF4444", bg: "var(--error-100)" },
   ];
 
-
-  const filtered = reports.filter((r: { targetType?: string; status?: string; reporter?: { name?: string }; reason?: string; title?: string; shop?: { name?: string } }) => {
-    let matchStatus = true;
-    if (statusFilter !== "ALL") matchStatus = r.status === statusFilter;
-    
-    let matchReason = true;
-    if (reasonFilter !== "ALL") matchReason = r.reason === reasonFilter;
-
-    if (!search) return matchStatus && matchReason;
-    const searchLower = search.toLowerCase();
-    const matchTitle = r.title?.toLowerCase().includes(searchLower) || false;
-    const matchShop = r.shop?.name?.toLowerCase().includes(searchLower) || false;
-    const matchReasonText = r.reason?.toLowerCase().includes(searchLower) || false;
-    return matchStatus && matchReason && (matchTitle || matchShop || matchReasonText);
-  });
+  const refresh = async () => {
+    await Promise.all([mutate(), mutateStats(), revalidateAdminSummary()]);
+  };
 
   const handleResolve = async (id: string, newStatus: string) => {
     try {
-      const token = localStorage.getItem("accessToken");
-      const res = await fetch(`${API_URL}/admin/reports/${id}/resolve`, {
-        method: "POST",
-        headers: { 
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${token}`
-        },
-        body: JSON.stringify({ status: newStatus })
+      setBusy(true);
+      await apiPost(`/admin/reports/${id}/resolve`, { status: newStatus });
+      toast.success(newStatus === "RESOLVED" ? "Report resolved" : "Marked under review");
+      await refresh();
+    } catch (e: unknown) {
+      toast.error((e as Error).message);
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const handleRemove = async (id: string) => {
+    try {
+      setBusy(true);
+      await apiPost(`/admin/reports/${id}/remove`);
+      toast.success("Reported content removed");
+      await refresh();
+    } catch (e: unknown) {
+      toast.error((e as Error).message);
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const toggleSelect = (id: string) => {
+    setSelected((prev) => (prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]));
+  };
+
+  const bulk = async (action: "RESOLVE" | "REMOVE") => {
+    if (selected.length === 0) {
+      toast.error("Select at least one report");
+      return;
+    }
+    try {
+      setBusy(true);
+      const res = await apiPost<{ processed: number; failed: number }>("/admin/reports/bulk", {
+        ids: selected,
+        action,
       });
-      if (res.ok) {
-        mutate();
-      }
-    } catch (e) {
-      console.error(e);
+      toast.success(`${action === "RESOLVE" ? "Resolved" : "Removed"} ${res.processed}${res.failed ? ` (${res.failed} failed)` : ""}`);
+      setSelected([]);
+      await refresh();
+    } catch (e: unknown) {
+      toast.error((e as Error).message);
+    } finally {
+      setBusy(false);
     }
   };
 
@@ -88,13 +122,19 @@ export default function ModerationPage() {
           <p className={s.pageSubtitle}>Review flagged listings and enforce community guidelines.</p>
         </div>
         <div style={{ display: "flex", gap: "8px" }}>
-          <button className={s.btnSecondary} id="mod-bulk-resolve">Bulk Resolve</button>
-          <button className={s.btnDanger} id="mod-bulk-remove">
+          <button className={s.btnSecondary} id="mod-bulk-resolve" onClick={() => bulk("RESOLVE")} disabled={busy}>Bulk Resolve</button>
+          <button className={s.btnDanger} id="mod-bulk-remove" onClick={() => bulk("REMOVE")} disabled={busy}>
             <Ban size={14} />
             Bulk Remove
           </button>
         </div>
       </div>
+
+      {error && (
+        <div style={{ padding: 12, background: "#fef2f2", color: "#b91c1c", borderRadius: 8, marginBottom: 12, fontSize: 14 }}>
+          {(error as Error).message || "Failed to load reports"}
+        </div>
+      )}
 
       {/* Stats Row */}
       <div className={localStyles.statsGrid}>
@@ -124,14 +164,14 @@ export default function ModerationPage() {
             placeholder="Search flagged items..."
             className={s.toolbarSearchInput}
             value={search}
-            onChange={(e) => setSearch(e.target.value)}
+            onChange={(e) => { setSearch(e.target.value); setCurrentPage(1); setSelected([]); }}
           />
         </div>
         <div className={s.toolbarActions}>
           <select 
             className={s.toolbarFilter} 
             value={reasonFilter} 
-            onChange={(e) => setReasonFilter(e.target.value)}
+            onChange={(e) => { setReasonFilter(e.target.value); setCurrentPage(1); setSelected([]); }}
             style={{ padding: "6px 12px", borderRadius: "6px", border: "1px solid var(--neutral-300)", fontSize: "13px", background: "white", cursor: "pointer" }}
           >
             <option value="ALL">All Reasons</option>
@@ -142,7 +182,7 @@ export default function ModerationPage() {
           <select 
             className={s.toolbarFilter} 
             value={statusFilter} 
-            onChange={(e) => setStatusFilter(e.target.value)}
+            onChange={(e) => { setStatusFilter(e.target.value); setCurrentPage(1); setSelected([]); }}
             style={{ padding: "6px 12px", borderRadius: "6px", border: "1px solid var(--neutral-300)", fontSize: "13px", background: "white", cursor: "pointer" }}
           >
             <option value="ALL">All Status</option>
@@ -158,12 +198,13 @@ export default function ModerationPage() {
       <div className={s.card}>
         <div className={s.cardHeader}>
           <span className={s.cardTitle}>Flagged Items</span>
-          <span style={{ fontSize: "12px", color: "var(--neutral-500)" }}>{filtered.length} results</span>
+          <span style={{ fontSize: "12px", color: "var(--neutral-500)" }}>{meta.total} results</span>
         </div>
         <div className={s.tableWrap}>
           <table className={s.table}>
             <thead>
               <tr>
+                <th style={{ width: 36 }}></th>
                 <th>Item</th>
                 <th>Shop</th>
                 <th>Reason</th>
@@ -174,10 +215,13 @@ export default function ModerationPage() {
               </tr>
             </thead>
             <tbody>
-              {filtered.map((item: { id: string; targetType: string; targetId: string; reporter?: { name?: string }; reason: string; status: string; createdAt: string; title?: string; shop?: { name?: string }; severity: string; image?: string; reports?: number; [key: string]: any }) => {
+              {reports.map((item: { id: string; targetType: string; targetId: string; reporter?: { name?: string }; reason: string; status: string; createdAt: string; title?: string; shop?: { name?: string }; severity: string; image?: string; reports?: number; [key: string]: unknown }) => {
                 const sv = severityBadge(item.severity.toLowerCase());
                 return (
                   <tr key={item.id}>
+                    <td onClick={(e) => e.stopPropagation()}>
+                      <input type="checkbox" checked={selected.includes(item.id)} onChange={() => toggleSelect(item.id)} />
+                    </td>
                     <td>
                       <div className={s.shopInfo}>
                         {item.image ? (
@@ -212,7 +256,7 @@ export default function ModerationPage() {
                       <div className={s.actionBtns}>
                         <button className={s.actionBtn} title="Review" onClick={() => handleResolve(item.id, 'UNDER_REVIEW')}><Eye size={14} /></button>
                         <button className={s.actionBtn} title="Resolve" style={{ color: "var(--success-500)" }} onClick={() => handleResolve(item.id, 'RESOLVED')}><CheckCheck size={14} /></button>
-                        <button className={`${s.actionBtn} ${s.actionBtnDanger}`} title="Remove"><Ban size={14} /></button>
+                        <button className={`${s.actionBtn} ${s.actionBtnDanger}`} title="Remove" onClick={() => handleRemove(item.id)} disabled={busy}><Ban size={14} /></button>
                       </div>
                     </td>
                   </tr>
@@ -223,7 +267,7 @@ export default function ModerationPage() {
         </div>
         <div className={s.pagination}>
           <span className={s.paginationMeta}>
-            Showing {filtered.length === 0 ? 0 : (currentPage - 1) * meta.limit + 1}–{Math.min(currentPage * meta.limit, meta.total)} of {meta.total} reports
+            Showing {reports.length === 0 ? 0 : (currentPage - 1) * meta.limit + 1}–{Math.min(currentPage * meta.limit, meta.total)} of {meta.total} reports
           </span>
           <div className={s.paginationBtns}>
             <button 

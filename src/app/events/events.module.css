@@ -325,3 +325,32 @@
   background: #ccc;
   cursor: not-allowed;
 }
+
+
+/* === Row entrance animation === */
+@keyframes rowEnter {
+  from { opacity: 0; transform: translateY(8px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+.table tbody tr {
+  animation: rowEnter 0.35s ease both;
+}
+
+.table tbody tr:nth-child(1) { animation-delay: 30ms; }
+.table tbody tr:nth-child(2) { animation-delay: 60ms; }
+.table tbody tr:nth-child(3) { animation-delay: 90ms; }
+.table tbody tr:nth-child(4) { animation-delay: 120ms; }
+.table tbody tr:nth-child(5) { animation-delay: 150ms; }
+.table tbody tr:nth-child(6) { animation-delay: 180ms; }
+.table tbody tr:nth-child(7) { animation-delay: 210ms; }
+.table tbody tr:nth-child(8) { animation-delay: 240ms; }
+.table tbody tr:nth-child(9) { animation-delay: 270ms; }
+.table tbody tr:nth-child(10) { animation-delay: 300ms; }
+.table tbody tr:nth-child(11) { animation-delay: 330ms; }
+.table tbody tr:nth-child(12) { animation-delay: 360ms; }
+.table tbody tr:nth-child(n+13) { animation-delay: 360ms; }
+
+@media (prefers-reduced-motion: reduce) {
+  .table tbody tr { animation: none; }
+}

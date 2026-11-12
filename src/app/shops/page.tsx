@@ -8,15 +8,16 @@ import { fetcher } from "@/lib/fetcher";
 import AdminLayout from "@/components/AdminLayout/AdminLayout";
 import Modal from "@/components/Modal/Modal";
 import {
-  Store, Plus, Search, Filter, MoreVertical,
-  MapPin, Phone, Mail, Link as LinkIcon,
-  ShieldCheck, AlertCircle, Eye, CheckCircle2,
-  XCircle, MoreHorizontal, ChevronLeft, ChevronRight, Edit2, Trash2,
+  Store, Plus, Search, Eye, ChevronLeft, ChevronRight, Edit2, Trash2,
   Image, X
 } from "lucide-react";
 import toast from "react-hot-toast";
 import s from "../../components/AdminLayout/shared.module.css";
 import { API_URL } from "@/config/constants";
+import { apiDelete, apiPatch, apiPost, authHeaders, buildQuery, createdFromFor, fetchAllPages, messageFromBody } from "@/lib/api";
+import { downloadCsv } from "@/lib/csv";
+import { useDebounce } from "@/lib/useDebounce";
+import { revalidateAdminSummary } from "@/lib/revalidate";
 
 function statusClass(status: string) {
   if (status === "Active") return s.statusActive;
@@ -28,24 +29,33 @@ function statusClass(status: string) {
 export default function ShopsPage() {
   const router = useRouter();
   const [currentPage, setCurrentPage] = useState(1);
-  const { data, error, mutate } = useSWR(`${API_URL}/admin/shops?page=${currentPage}&limit=50`, fetcher);
-  const { data: categoriesData } = useSWR(`${API_URL}/categories`, fetcher);
-  
-  const shops = data?.data || [];
-  const meta = data?.meta || { total: 0, page: 1, limit: 50, totalPages: 1 };
-  const categories = Array.isArray(categoriesData) ? categoriesData : (categoriesData?.data || []);
-
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState("ALL");
   const [categoryFilter, setCategoryFilter] = useState("ALL");
   const [dateFilter, setDateFilter] = useState("ALL");
+  const debouncedSearch = useDebounce(search.trim(), 350);
+
+  const query = buildQuery({
+    page: currentPage,
+    limit: 50,
+    search: debouncedSearch || undefined,
+    status: statusFilter,
+    categoryId: categoryFilter,
+    createdFrom: createdFromFor(dateFilter),
+  });
+  const { data, error, mutate, isLoading } = useSWR(`${API_URL}/admin/shops${query}`, fetcher);
+  const { data: categoriesData } = useSWR(`${API_URL}/categories`, fetcher);
+
+  const shops = data?.data || [];
+  const meta = data?.meta || { total: 0, page: 1, limit: 50, totalPages: 1 };
+  const categories = Array.isArray(categoriesData) ? categoriesData : (categoriesData?.data || []);
+
   const [isAddOpen, setAddOpen] = useState(false);
   const [editShopId, setEditShopId] = useState<string | null>(null);
   const [deleteShopId, setDeleteShopId] = useState<string | null>(null);
-  
-  const [editStatus, setEditStatus] = useState("Active");
+  const [busy, setBusy] = useState(false);
+  const [editStatus, setEditStatus] = useState("ACTIVE");
 
-  // Create Shop State
   const [newShopName, setNewShopName] = useState("");
   const [newShopCategory, setNewShopCategory] = useState("");
   const [newShopCity, setNewShopCity] = useState("");
@@ -61,92 +71,65 @@ export default function ShopsPage() {
   const [newShopLogoPreview, setNewShopLogoPreview] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
 
-  // Set default category when categories load
-  React.useEffect(() => {
-    if (categories.length > 0 && !newShopCategory) {
-      setNewShopCategory(categories[0].id);
-    }
-  }, [categories, newShopCategory]);
+
+  const resetCreate = () => {
+    setNewShopName("");
+    setNewShopCategory(categories.length > 0 ? categories[0].id : "");
+    setNewShopCity("");
+    setNewShopState("");
+    setNewShopPincode("");
+    setNewShopAddress("");
+    setNewShopPhone("");
+    setNewShopWhatsapp("");
+    setNewShopGst("");
+    setNewOwnerEmail("");
+    setNewOwnerName("");
+    setNewShopLogo(null);
+    if (newShopLogoPreview) URL.revokeObjectURL(newShopLogoPreview);
+    setNewShopLogoPreview(null);
+  };
 
   const handleCreateShop = async () => {
-    if (!newShopName || !newOwnerEmail || !newShopCategory) {
+    if (!newShopName.trim() || !newOwnerEmail.trim() || !newShopCategory) {
       toast.error("Shop Name, Category, and Owner Email are required");
       return;
     }
     try {
       setIsSubmitting(true);
-      const token = localStorage.getItem("accessToken");
-      
       let logoUrl: string | undefined;
-      
       if (newShopLogo) {
         const formData = new FormData();
         formData.append("file", newShopLogo);
-        
         const uploadRes = await fetch(`${API_URL}/upload/image`, {
           method: "POST",
-          headers: {
-            Authorization: `Bearer ${token}`
-          },
-          body: formData
+          headers: authHeaders(false),
+          body: formData,
         });
-        
-        if (!uploadRes.ok) {
-          throw new Error("Failed to upload logo");
-        }
-        
-        const uploadData = await uploadRes.json();
-        if (uploadData?.data?.url) {
-          logoUrl = uploadData.data.url;
-        }
+        const uploadData = await uploadRes.json().catch(() => ({}));
+        if (!uploadRes.ok) throw new Error(messageFromBody(uploadData, "Failed to upload logo"));
+        logoUrl = uploadData?.data?.url;
       }
 
-      const res = await fetch(`${API_URL}/admin/shops`, {
-        method: "POST",
-        headers: { 
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${token}`
-        },
-        body: JSON.stringify({ 
-          name: newShopName, 
-          categoryId: newShopCategory, 
-          city: newShopCity,
-          state: newShopState,
-          pincode: newShopPincode,
-          address: newShopAddress,
-          phone: newShopPhone,
-          whatsapp: newShopWhatsapp,
-          gstNumber: newShopGst,
-          ownerEmail: newOwnerEmail,
-          ownerName: newOwnerName,
-          logoUrl
-        })
+      await apiPost("/admin/shops", {
+        name: newShopName.trim(),
+        categoryId: newShopCategory,
+        city: newShopCity.trim() || undefined,
+        state: newShopState.trim() || undefined,
+        pincode: newShopPincode.trim() || undefined,
+        address: newShopAddress.trim() || undefined,
+        phone: newShopPhone.trim() || undefined,
+        whatsapp: newShopWhatsapp.trim() || undefined,
+        gstNumber: newShopGst.trim() || undefined,
+        ownerEmail: newOwnerEmail.trim(),
+        ownerName: newOwnerName.trim() || undefined,
+        logoUrl,
       });
-      if (!res.ok) {
-        const err = await res.json();
-        throw new Error(err.message || "Failed to create shop");
-      }
-      toast.success("Shop created successfully!");
+      toast.success("Shop created successfully");
       setAddOpen(false);
-      
-      setNewShopName("");
-      setNewShopCategory(categories.length > 0 ? categories[0].id : "");
-      setNewShopCity("");
-      setNewShopState("");
-      setNewShopPincode("");
-      setNewShopAddress("");
-      setNewShopPhone("");
-      setNewShopWhatsapp("");
-      setNewShopGst("");
-      setNewOwnerEmail("");
-      setNewOwnerName("");
-      setNewShopLogo(null);
-      if (newShopLogoPreview) URL.revokeObjectURL(newShopLogoPreview);
-      setNewShopLogoPreview(null);
-      
-      mutate();
-    } catch (e: any) {
-      toast.error(e.message || "Failed to create shop");
+      resetCreate();
+      await Promise.all([mutate(), revalidateAdminSummary()]);
+    } catch (e: unknown) {
+      toast.error((e as Error).message || "Failed to create shop");
     } finally {
       setIsSubmitting(false);
     }
@@ -166,79 +149,87 @@ export default function ShopsPage() {
     setNewShopLogoPreview(null);
   };
 
+  const openEdit = (shop: { id: string; status?: string; isKycVerified?: boolean }) => {
+    setEditShopId(shop.id);
+    if (shop.status === "SUSPENDED") setEditStatus("SUSPENDED");
+    else if (shop.status === "INACTIVE") setEditStatus("INACTIVE");
+    else if (shop.isKycVerified) setEditStatus("VERIFIED");
+    else setEditStatus("PENDING");
+  };
+
   const handleEditStatus = async () => {
+    if (!editShopId) return;
+    setBusy(true);
     try {
-      if (!editShopId) return;
-      const token = localStorage.getItem("accessToken");
-      const res = await fetch(`${API_URL}/admin/shops/${editShopId}/verify`, {
-        method: "POST",
-        headers: { 
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${token}`
-        },
-        body: JSON.stringify({ isGstVerified: editStatus === "Active", isKycVerified: editStatus === "Active" })
-      });
-      if (res.ok) {
-        setEditShopId(null);
-        mutate();
+      const body: Record<string, unknown> = {};
+      if (editStatus === "VERIFIED") {
+        body.status = "ACTIVE";
+        body.isKycVerified = true;
+        body.isGstVerified = true;
+      } else if (editStatus === "PENDING") {
+        body.status = "ACTIVE";
+        body.isKycVerified = false;
+        body.isGstVerified = false;
+      } else {
+        body.status = editStatus; // ACTIVE | INACTIVE | SUSPENDED
       }
-    } catch (e) {
-      console.error(e);
+      await apiPatch(`/admin/shops/${editShopId}`, body);
+      toast.success("Shop updated");
+      setEditShopId(null);
+      await Promise.all([mutate(), revalidateAdminSummary()]);
+    } catch (e: unknown) {
+      toast.error((e as Error).message);
+    } finally {
+      setBusy(false);
     }
   };
 
-  const filtered = shops.filter((s: { name?: string; owner?: { name?: string; email?: string }; isKycVerified?: boolean; categoryId?: string; createdAt?: string }) => {
-    let matchStatus = true;
-    if (statusFilter === "VERIFIED") matchStatus = s.isKycVerified === true;
-    if (statusFilter === "PENDING") matchStatus = s.isKycVerified === false;
-    
-    let matchCategory = true;
-    if (categoryFilter !== "ALL") matchCategory = s.categoryId === categoryFilter;
-
-    let matchDate = true;
-    if (dateFilter !== "ALL" && s.createdAt) {
-      const joinDate = new Date(s.createdAt);
-      const now = new Date();
-      const diffTime = Math.abs(now.getTime() - joinDate.getTime());
-      const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
-      
-      if (dateFilter === "LAST_7_DAYS") matchDate = diffDays <= 7;
-      if (dateFilter === "LAST_30_DAYS") matchDate = diffDays <= 30;
-      if (dateFilter === "THIS_YEAR") matchDate = joinDate.getFullYear() === now.getFullYear();
+  const handleDelete = async () => {
+    if (!deleteShopId) return;
+    setBusy(true);
+    try {
+      await apiDelete(`/admin/shops/${deleteShopId}`);
+      toast.success("Shop deleted");
+      setDeleteShopId(null);
+      await Promise.all([mutate(), revalidateAdminSummary()]);
+    } catch (e: unknown) {
+      toast.error((e as Error).message);
+    } finally {
+      setBusy(false);
     }
+  };
 
-    if (!search) return matchStatus && matchCategory && matchDate;
-    const searchLower = search.toLowerCase();
-    const matchName = s.name?.toLowerCase().includes(searchLower) || false;
-    const matchOwnerName = s.owner?.name?.toLowerCase().includes(searchLower) || false;
-    return matchStatus && matchCategory && matchDate && (matchName || matchOwnerName);
-  });
-
-  const handleExportCSV = () => {
-    if (filtered.length === 0) {
-      toast.error("No data to export");
-      return;
+  const handleExportCSV = async () => {
+    try {
+      toast.loading("Preparing export...", { id: "shops-export" });
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const rows = await fetchAllPages<any>("/admin/shops", {
+        search: debouncedSearch || undefined,
+        status: statusFilter,
+        categoryId: categoryFilter,
+        createdFrom: createdFromFor(dateFilter),
+      });
+      if (rows.length === 0) {
+        toast.error("No data to export", { id: "shops-export" });
+        return;
+      }
+      downloadCsv(
+        "shops_export.csv",
+        ["ID", "Shop Name", "Category", "City", "Status", "Owner Email", "Rating"],
+        rows.map((sh) => [
+          sh.id,
+          sh.name || "",
+          (sh.category as { name?: string } | undefined)?.name || "General",
+          sh.city || "",
+          sh.status === "SUSPENDED" ? "Suspended" : sh.isKycVerified ? "Verified" : "Pending",
+          (sh.owner as { email?: string } | undefined)?.email || "",
+          sh.rating ?? 0,
+        ]),
+      );
+      toast.success(`Exported ${rows.length} shops`, { id: "shops-export" });
+    } catch (e: unknown) {
+      toast.error((e as Error).message || "Export failed", { id: "shops-export" });
     }
-    const headers = ["ID", "Shop Name", "Category", "City", "Status", "Owner Email", "Rating"];
-    const rows = filtered.map((s: any) => [
-      s.id,
-      `"${s.name || ''}"`,
-      `"${s.category || 'General'}"`,
-      `"${s.city || ''}"`,
-      s.isKycVerified ? "Verified" : "Pending",
-      `"${s.owner?.email || ''}"`,
-      s.averageRating || 0
-    ]);
-    const csvContent = "data:text/csv;charset=utf-8," 
-      + [headers.join(","), ...rows.map((r: any) => r.join(","))].join("\n");
-    const encodedUri = encodeURI(csvContent);
-    const link = document.createElement("a");
-    link.setAttribute("href", encodedUri);
-    link.setAttribute("download", "shops_export.csv");
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
-    toast.success("Export successful");
   };
 
   return (
@@ -253,12 +244,18 @@ export default function ShopsPage() {
           <button className={s.btnSecondary} id="shops-export" onClick={handleExportCSV}>
             Export CSV
           </button>
-          <button className={s.btnPrimary} id="shops-add" onClick={() => setAddOpen(true)}>
+          <button className={s.btnPrimary} id="shops-add" onClick={() => { if (!newShopCategory && categories[0]?.id) setNewShopCategory(categories[0].id); setAddOpen(true); }}>
             <Plus size={15} />
             Add Shop
           </button>
         </div>
       </div>
+
+      {error && (
+        <div style={{ padding: 12, background: "#fef2f2", color: "#b91c1c", borderRadius: 8, marginBottom: 12, fontSize: 14 }}>
+          {(error as Error).message || "Failed to load shops"}
+        </div>
+      )}
 
       {/* Toolbar */}
       <div className={s.toolbar}>
@@ -270,35 +267,37 @@ export default function ShopsPage() {
             placeholder="Search by name or category..."
             className={s.toolbarSearchInput}
             value={search}
-            onChange={(e) => setSearch(e.target.value)}
+            onChange={(e) => { setSearch(e.target.value); setCurrentPage(1); }}
           />
         </div>
         <div className={s.toolbarActions}>
           <select 
             className={s.toolbarFilter} 
             value={statusFilter} 
-            onChange={(e) => setStatusFilter(e.target.value)}
+            onChange={(e) => { setStatusFilter(e.target.value); setCurrentPage(1); }}
             style={{ padding: "6px 12px", borderRadius: "6px", border: "1px solid var(--neutral-300)", fontSize: "13px", background: "white", cursor: "pointer" }}
           >
             <option value="ALL">All Status</option>
             <option value="VERIFIED">Verified</option>
             <option value="PENDING">Pending</option>
+            <option value="SUSPENDED">Suspended</option>
+            <option value="INACTIVE">Inactive</option>
           </select>
           <select 
             className={s.toolbarFilter} 
             value={categoryFilter} 
-            onChange={(e) => setCategoryFilter(e.target.value)}
+            onChange={(e) => { setCategoryFilter(e.target.value); setCurrentPage(1); }}
             style={{ padding: "6px 12px", borderRadius: "6px", border: "1px solid var(--neutral-300)", fontSize: "13px", background: "white", cursor: "pointer" }}
           >
             <option value="ALL">All Categories</option>
-            {categories.map((cat: any) => (
+            {categories.map((cat: { id: string; name: string }) => (
               <option key={cat.id} value={cat.id}>{cat.name}</option>
             ))}
           </select>
           <select 
             className={s.toolbarFilter} 
             value={dateFilter} 
-            onChange={(e) => setDateFilter(e.target.value)}
+            onChange={(e) => { setDateFilter(e.target.value); setCurrentPage(1); }}
             style={{ padding: "6px 12px", borderRadius: "6px", border: "1px solid var(--neutral-300)", fontSize: "13px", background: "white", cursor: "pointer" }}
           >
             <option value="ALL">All Time</option>
@@ -313,7 +312,7 @@ export default function ShopsPage() {
       <div className={s.card}>
         <div className={s.cardHeader}>
           <span className={s.cardTitle}>All Shops</span>
-          <span style={{ fontSize: "12px", color: "var(--neutral-500)" }}>{filtered.length} results</span>
+          <span style={{ fontSize: "12px", color: "var(--neutral-500)" }}>{meta.total} results</span>
         </div>
         <div className={s.tableWrap}>
           <table className={s.table}>
@@ -328,7 +327,9 @@ export default function ShopsPage() {
               </tr>
             </thead>
             <tbody>
-              {filtered.map((shop: { id: string; name: string; isActive: boolean; owner?: { name?: string; email?: string }; rating?: number; reviewCount?: number; isKycVerified?: boolean; isGstVerified?: boolean; createdAt: string; category?: string; city?: string; averageRating?: number; logoUrl?: string; [key: string]: any }) => (
+              {shops.map((shop: {
+                  id: string; name: string; logoUrl?: string; city?: string; rating?: number | string; status?: string; isKycVerified?: boolean; owner?: { email?: string }; category?: { name?: string } | string;
+                }) => (
                 <tr 
                   key={shop.id} 
                   onClick={() => router.push(`/shops/${shop.id}`)}
@@ -349,14 +350,14 @@ export default function ShopsPage() {
                       </div>
                     </div>
                   </td>
-                  <td style={{ color: "var(--neutral-600)" }}>{shop.category || 'General'}</td>
+                  <td style={{ color: "var(--neutral-600)" }}>{(typeof shop.category === 'object' && shop.category?.name) || (typeof shop.category === 'string' ? shop.category : 'General')}</td>
                   <td style={{ color: "var(--neutral-600)" }}>{shop.city || 'N/A'}</td>
                   <td style={{ fontWeight: 700, color: "var(--neutral-900)" }}>
-                    {shop.averageRating ? `${shop.averageRating} Stars` : "No Ratings"}
+                    {shop.rating ? `${Number(shop.rating).toFixed(1)} Stars` : "No Ratings"}
                   </td>
                   <td>
-                    <span className={`${s.statusBadge} ${shop.isKycVerified ? s.statusActive : s.statusPending}`}>
-                      {shop.isKycVerified ? "Verified" : "Pending"}
+                    <span className={`${s.statusBadge} ${shop.status === "SUSPENDED" || shop.status === "INACTIVE" ? s.statusSuspended : shop.isKycVerified ? s.statusActive : s.statusPending}`}>
+                      {shop.status === "SUSPENDED" ? "Suspended" : shop.status === "INACTIVE" ? "Inactive" : shop.isKycVerified ? "Verified" : "Pending"}
                     </span>
                   </td>
                   <td>
@@ -372,7 +373,7 @@ export default function ShopsPage() {
                       >
                         <Eye size={14} />
                       </button>
-                      <button className={s.actionBtn} title="Edit" id={`shop-edit-${shop.id}`} onClick={(e) => { e.stopPropagation(); setEditShopId(shop.id); }}>
+                      <button className={s.actionBtn} title="Edit" id={`shop-edit-${shop.id}`} onClick={(e) => { e.stopPropagation(); openEdit(shop); }}>
                         <Edit2 size={14} />
                       </button>
                       <button className={`${s.actionBtn} ${s.actionBtnDanger}`} title="Delete" id={`shop-delete-${shop.id}`} onClick={(e) => { e.stopPropagation(); setDeleteShopId(shop.id); }}>
@@ -385,7 +386,7 @@ export default function ShopsPage() {
             </tbody>
           </table>
 
-          {filtered.length === 0 && (
+          {!isLoading && shops.length === 0 && (
             <div className={s.emptyState}>
               <div className={s.emptyIcon}>
                 <Store size={28} />
@@ -399,7 +400,7 @@ export default function ShopsPage() {
         {/* Pagination */}
         <div className={s.pagination}>
           <span className={s.paginationMeta}>
-            Showing {filtered.length === 0 ? 0 : (currentPage - 1) * meta.limit + 1}–{Math.min(currentPage * meta.limit, meta.total)} of {meta.total} shops
+            Showing {shops.length === 0 ? 0 : (currentPage - 1) * meta.limit + 1}–{Math.min(currentPage * meta.limit, meta.total)} of {meta.total} shops
           </span>
           <div className={s.paginationBtns}>
             <button 
@@ -479,7 +480,7 @@ export default function ShopsPage() {
           <div>
             <label style={{ fontSize: 13, fontWeight: 600, color: "var(--neutral-700)", marginBottom: 8, display: "block" }}>Category</label>
             <select value={newShopCategory} onChange={e => setNewShopCategory(e.target.value)} style={{ width: "100%", padding: "10px 12px", border: "1px solid var(--neutral-300)", borderRadius: 8, background: "white" }}>
-              {categories.map((cat: any) => (
+              {categories.map((cat: { id: string; name: string }) => (
                 <option key={cat.id} value={cat.id}>{cat.name}</option>
               ))}
             </select>
@@ -526,24 +527,26 @@ export default function ShopsPage() {
           <div>
             <label style={{ fontSize: 13, fontWeight: 600, color: "var(--neutral-700)", marginBottom: 8, display: "block" }}>Status</label>
             <select value={editStatus} onChange={e => setEditStatus(e.target.value)} style={{ width: "100%", padding: "10px 12px", border: "1px solid var(--neutral-300)", borderRadius: 8, background: "white" }}>
-              <option value="Active">Active</option>
-              <option value="Pending">Pending</option>
-              <option value="Suspended">Suspended</option>
+              <option value="VERIFIED">Verified (KYC + GST)</option>
+              <option value="PENDING">Pending verification</option>
+              <option value="ACTIVE">Active</option>
+              <option value="INACTIVE">Inactive</option>
+              <option value="SUSPENDED">Suspended</option>
             </select>
           </div>
           <div style={{ display: "flex", justifyContent: "flex-end", gap: 12, marginTop: 16 }}>
-            <button className={s.btnSecondary} onClick={() => setEditShopId(null)}>Cancel</button>
-            <button className={s.btnPrimary} onClick={handleEditStatus}>Save Changes</button>
+            <button className={s.btnSecondary} onClick={() => setEditShopId(null)} disabled={busy}>Cancel</button>
+            <button className={s.btnPrimary} onClick={handleEditStatus} disabled={busy}>{busy ? "Saving..." : "Save Changes"}</button>
           </div>
         </div>
       </Modal>
 
       <Modal isOpen={deleteShopId !== null} onClose={() => setDeleteShopId(null)} title="Delete Shop">
         <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
-          <p style={{ color: "var(--neutral-700)", fontSize: 15, margin: 0 }}>Are you sure you want to delete this shop? All products, offers, and history will be lost. This cannot be undone.</p>
+          <p style={{ color: "var(--neutral-700)", fontSize: 15, margin: 0 }}>Delete this shop only if it has no orders, reservations, negotiations or reviews. Otherwise suspend it instead. This cannot be undone.</p>
           <div style={{ display: "flex", justifyContent: "flex-end", gap: 12, marginTop: 16 }}>
-            <button className={s.btnSecondary} onClick={() => setDeleteShopId(null)}>Cancel</button>
-            <button className={s.btnPrimary} style={{ background: "var(--red-600)" }} onClick={() => { setDeleteShopId(null); toast.success("Shop Deleted"); }}>Delete Shop</button>
+            <button className={s.btnSecondary} onClick={() => setDeleteShopId(null)} disabled={busy}>Cancel</button>
+            <button className={s.btnPrimary} style={{ background: "var(--red-600)" }} onClick={handleDelete} disabled={busy}>{busy ? "Deleting..." : "Delete Shop"}</button>
           </div>
         </div>
       </Modal>

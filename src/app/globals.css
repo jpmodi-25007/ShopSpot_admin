@@ -175,3 +175,36 @@ img { display: block; max-width: 100%; }
 .page-enter {
   animation: fadeInUp 0.3s ease both;
 }
+
+/* === Colour aliases ===
+   These names were referenced by several pages (badges, danger buttons, detail
+   cards) but never defined, so those elements rendered without colour. */
+:root {
+  --teal-50: var(--primary-50);
+  --teal-100: var(--primary-100);
+  --teal-500: var(--primary-500);
+  --teal-600: var(--primary-600);
+  --teal-700: var(--primary-700);
+
+  --red-50: var(--error-50);
+  --red-200: #FECACA;
+  --red-600: var(--error-600);
+
+  --amber-50: var(--warning-50);
+  --amber-100: var(--warning-100);
+  --amber-200: var(--secondary-200);
+  --amber-500: var(--warning-500);
+  --amber-600: var(--warning-600);
+  --amber-700: #B45309;
+
+  --blue-50: var(--info-50);
+  --blue-600: var(--info-600);
+
+  --purple-50: #F5F3FF;
+  --purple-600: #7C3AED;
+
+  --text-primary: var(--neutral-900);
+  --text-secondary: var(--neutral-600);
+  --text-tertiary: var(--neutral-400);
+  --border-color: var(--neutral-200);
+}

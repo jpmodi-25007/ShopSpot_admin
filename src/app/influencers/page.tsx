@@ -8,45 +8,44 @@ import { fetcher } from "@/lib/fetcher";
 import AdminLayout from "@/components/AdminLayout/AdminLayout";
 import Modal from "@/components/Modal/Modal";
 import {
-  Search, Filter, Eye, Edit2, ShieldOff,
+  Search, Eye, Edit2, ShieldOff,
   ChevronLeft, ChevronRight, Star as StarIcon, UserCheck,
 } from "lucide-react";
 import toast from "react-hot-toast";
 import s from "../../components/AdminLayout/shared.module.css";
 import { API_URL } from "@/config/constants";
+import { apiPost, buildQuery, createdFromFor, fetchAllPages } from "@/lib/api";
+import { downloadCsv } from "@/lib/csv";
+import { useDebounce } from "@/lib/useDebounce";
+import { revalidateAdminSummary } from "@/lib/revalidate";
 
 
-function statusClass(status: string) {
-  if (status === "Verified") return s.statusActive;
-  if (status === "Pending") return s.statusPending;
-  if (status === "Flagged") return s.statusSuspended;
-  return s.statusInactive;
-}
 
-function StarRating({ rating }: { rating: number }) {
-  if (!rating) return <span style={{ color: "var(--neutral-400)", fontSize: 12 }}>—</span>;
-  return (
-    <span style={{ display: "flex", alignItems: "center", gap: 4, fontSize: 13, fontWeight: 600 }}>
-      <StarIcon size={13} style={{ color: "#F59E0B", fill: "#F59E0B" }} />
-      {rating.toFixed(1)}
-    </span>
-  );
-}
+
 
 export default function InfluencersPage() {
   const router = useRouter();
   const [currentPage, setCurrentPage] = useState(1);
-  const { data, error, mutate } = useSWR(`${API_URL}/admin/influencers?page=${currentPage}&limit=50`, fetcher);
-  const { data: categoriesData } = useSWR(`${API_URL}/categories`, fetcher);
-  
-  const influencers = data?.data || [];
-  const meta = data?.meta || { total: 0, page: 1, limit: 50, totalPages: 1 };
-  const categories = Array.isArray(categoriesData) ? categoriesData : (categoriesData?.data || []);
-
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState("ALL");
   const [nicheFilter, setNicheFilter] = useState("ALL");
   const [dateFilter, setDateFilter] = useState("ALL");
+  const debouncedSearch = useDebounce(search.trim(), 350);
+
+  const query = buildQuery({
+    page: currentPage,
+    limit: 50,
+    search: debouncedSearch || undefined,
+    status: statusFilter,
+    createdFrom: createdFromFor(dateFilter),
+  });
+  const { data, error, mutate, isLoading } = useSWR(`${API_URL}/admin/influencers${query}`, fetcher);
+  const { data: categoriesData } = useSWR(`${API_URL}/categories`, fetcher);
+
+  const influencers = data?.data || [];
+  const meta = data?.meta || { total: 0, page: 1, limit: 50, totalPages: 1 };
+  const categories = Array.isArray(categoriesData) ? categoriesData : (categoriesData?.data || []);
+
   const [isInviteOpen, setInviteOpen] = useState(false);
   const [inviteEmail, setInviteEmail] = useState("");
   const [inviteName, setInviteName] = useState("");
@@ -57,66 +56,45 @@ export default function InfluencersPage() {
   const [inviteYoutube, setInviteYoutube] = useState("");
   const [inviteFacebook, setInviteFacebook] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
-  
+  const [busy, setBusy] = useState(false);
+
   const [editCreatorId, setEditCreatorId] = useState<string | null>(null);
   const [deleteCreatorId, setDeleteCreatorId] = useState<string | null>(null);
-
   const [editStatus, setEditStatus] = useState("VERIFIED");
 
   const handleEditStatus = async () => {
+    if (!editCreatorId) return;
+    setBusy(true);
     try {
-      if (!editCreatorId) return;
-      const token = localStorage.getItem("accessToken");
-      const res = await fetch(`${API_URL}/admin/influencers/${editCreatorId}/verify`, {
-        method: "POST",
-        headers: { 
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${token}`
-        },
-        body: JSON.stringify({ status: editStatus })
-      });
-      if (res.ok) {
-        setEditCreatorId(null);
-        mutate();
-      }
-    } catch (e) {
-      console.error(e);
+      await apiPost(`/admin/influencers/${editCreatorId}/verify`, { status: editStatus });
+      toast.success("Verification updated");
+      setEditCreatorId(null);
+      await Promise.all([mutate(), revalidateAdminSummary()]);
+    } catch (e: unknown) {
+      toast.error((e as Error).message);
+    } finally {
+      setBusy(false);
     }
   };
 
   const handleInvite = async () => {
-    if (!inviteName || !inviteEmail) {
+    if (!inviteName.trim() || !inviteEmail.trim()) {
       toast.error("Name and Email are required");
       return;
     }
-    
     setIsSubmitting(true);
     try {
-      const token = localStorage.getItem("accessToken");
-      const res = await fetch(`${API_URL}/admin/influencers`, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${token}`
-        },
-        body: JSON.stringify({
-          name: inviteName,
-          email: inviteEmail,
-          bio: inviteBio,
-          city: inviteCity,
-          categoryId: inviteCategory,
-          instagramUrl: inviteInstagram,
-          youtubeUrl: inviteYoutube,
-          facebookUrl: inviteFacebook
-        })
+      await apiPost("/admin/influencers", {
+        name: inviteName.trim(),
+        email: inviteEmail.trim(),
+        bio: inviteBio.trim() || undefined,
+        city: inviteCity.trim() || undefined,
+        categoryId: inviteCategory || undefined,
+        instagramUrl: inviteInstagram.trim() || undefined,
+        youtubeUrl: inviteYoutube.trim() || undefined,
+        facebookUrl: inviteFacebook.trim() || undefined,
       });
-
-      if (!res.ok) {
-        const err = await res.json();
-        throw new Error(err.message || "Failed to create influencer");
-      }
-
-      toast.success(`Influencer ${inviteName} created successfully!`);
+      toast.success(`Influencer ${inviteName.trim()} created successfully`);
       setInviteOpen(false);
       setInviteEmail("");
       setInviteName("");
@@ -126,39 +104,66 @@ export default function InfluencersPage() {
       setInviteInstagram("");
       setInviteYoutube("");
       setInviteFacebook("");
-      mutate();
-    } catch (e: any) {
-      toast.error(e.message || "Failed to create influencer");
+      await Promise.all([mutate(), revalidateAdminSummary()]);
+    } catch (e: unknown) {
+      toast.error((e as Error).message || "Failed to create influencer");
     } finally {
       setIsSubmitting(false);
     }
   };
 
-  const filtered = influencers.filter((c: any) => {
-    let matchStatus = true;
-    if (statusFilter !== "ALL") matchStatus = c.verificationStatus === statusFilter;
-    
-    let matchNiche = true;
-    if (nicheFilter !== "ALL") matchNiche = c.socialPlatform === nicheFilter;
-
-    let matchDate = true;
-    if (dateFilter !== "ALL" && c.createdAt) {
-      const joinDate = new Date(c.createdAt);
-      const now = new Date();
-      const diffTime = Math.abs(now.getTime() - joinDate.getTime());
-      const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
-      
-      if (dateFilter === "LAST_7_DAYS") matchDate = diffDays <= 7;
-      if (dateFilter === "LAST_30_DAYS") matchDate = diffDays <= 30;
-      if (dateFilter === "THIS_YEAR") matchDate = joinDate.getFullYear() === now.getFullYear();
+  const handleSuspend = async () => {
+    if (!deleteCreatorId) return;
+    const row = influencers.find((c: { id: string; userId?: string; user?: { id?: string } }) => c.id === deleteCreatorId);
+    const userId = row?.userId || row?.user?.id;
+    if (!userId) {
+      toast.error("Cannot suspend: user id missing");
+      return;
     }
+    setBusy(true);
+    try {
+      await apiPost(`/admin/users/${userId}/suspend`, { isActive: false });
+      toast.success("Influencer suspended");
+      setDeleteCreatorId(null);
+      await Promise.all([mutate(), revalidateAdminSummary()]);
+    } catch (e: unknown) {
+      toast.error((e as Error).message);
+    } finally {
+      setBusy(false);
+    }
+  };
 
-    if (!search) return matchStatus && matchNiche && matchDate;
-    const searchLower = search.toLowerCase();
-    const matchName = c.user?.name?.toLowerCase().includes(searchLower) || false;
-    const matchDisplayName = c.displayName?.toLowerCase().includes(searchLower) || false;
-    return matchStatus && matchNiche && matchDate && (matchName || matchDisplayName);
-  });
+  const handleExportCSV = async () => {
+    try {
+      toast.loading("Preparing export...", { id: "inf-export" });
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const rows = await fetchAllPages<any>("/admin/influencers", {
+        search: debouncedSearch || undefined,
+        status: statusFilter,
+        createdFrom: createdFromFor(dateFilter),
+      });
+      if (!rows.length) {
+        toast.error("No data to export", { id: "inf-export" });
+        return;
+      }
+      downloadCsv(
+        "influencers_export.csv",
+        ["ID", "Display Name", "Email", "Status", "Followers", "City"],
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        rows.map((c: any) => [
+          c.id,
+          c.displayName || c.user?.name || "",
+          c.user?.email || "",
+          c.user?.isActive === false ? "Suspended" : c.verificationStatus,
+          c.followers ?? 0,
+          c.city || "",
+        ]),
+      );
+      toast.success(`Exported ${rows.length} influencers`, { id: "inf-export" });
+    } catch (e: unknown) {
+      toast.error((e as Error).message || "Export failed", { id: "inf-export" });
+    }
+  };
 
   return (
     <AdminLayout>
@@ -169,13 +174,19 @@ export default function InfluencersPage() {
           <p className={s.pageSubtitle}>Review and manage creator accounts and campaigns.</p>
         </div>
         <div style={{ display: "flex", gap: "8px" }}>
-          <button className={s.btnSecondary} id="influencers-export" onClick={() => toast.success('Export started.')}>Export CSV</button>
+          <button className={s.btnSecondary} id="influencers-export" onClick={handleExportCSV}>Export CSV</button>
           <button className={s.btnPrimary} id="influencers-invite" onClick={() => setInviteOpen(true)}>
             <UserCheck size={14} />
             Invite Creator
           </button>
         </div>
       </div>
+
+      {error && (
+        <div style={{ padding: 12, background: "#fef2f2", color: "#b91c1c", borderRadius: 8, marginBottom: 12, fontSize: 14 }}>
+          {(error as Error).message || "Failed to load influencers"}
+        </div>
+      )}
 
       {/* Toolbar */}
       <div className={s.toolbar}>
@@ -187,14 +198,14 @@ export default function InfluencersPage() {
             placeholder="Search by name or niche..."
             className={s.toolbarSearchInput}
             value={search}
-            onChange={(e) => setSearch(e.target.value)}
+            onChange={(e) => { setSearch(e.target.value); setCurrentPage(1); }}
           />
         </div>
         <div className={s.toolbarActions}>
           <select 
             className={s.toolbarFilter} 
             value={statusFilter} 
-            onChange={(e) => setStatusFilter(e.target.value)}
+            onChange={(e) => { setStatusFilter(e.target.value); setCurrentPage(1); }}
             style={{ padding: "6px 12px", borderRadius: "6px", border: "1px solid var(--neutral-300)", fontSize: "13px", background: "white", cursor: "pointer" }}
           >
             <option value="ALL">All Status</option>
@@ -205,7 +216,7 @@ export default function InfluencersPage() {
           <select 
             className={s.toolbarFilter} 
             value={nicheFilter} 
-            onChange={(e) => setNicheFilter(e.target.value)}
+            onChange={(e) => { setNicheFilter(e.target.value); setCurrentPage(1); }}
             style={{ padding: "6px 12px", borderRadius: "6px", border: "1px solid var(--neutral-300)", fontSize: "13px", background: "white", cursor: "pointer" }}
           >
             <option value="ALL">All Niches</option>
@@ -217,7 +228,7 @@ export default function InfluencersPage() {
           <select 
             className={s.toolbarFilter} 
             value={dateFilter} 
-            onChange={(e) => setDateFilter(e.target.value)}
+            onChange={(e) => { setDateFilter(e.target.value); setCurrentPage(1); }}
             style={{ padding: "6px 12px", borderRadius: "6px", border: "1px solid var(--neutral-300)", fontSize: "13px", background: "white", cursor: "pointer" }}
           >
             <option value="ALL">All Time</option>
@@ -232,7 +243,7 @@ export default function InfluencersPage() {
       <div className={s.card}>
         <div className={s.cardHeader}>
           <span className={s.cardTitle}>All Influencers</span>
-          <span style={{ fontSize: "12px", color: "var(--neutral-500)" }}>{filtered.length} results</span>
+          <span style={{ fontSize: "12px", color: "var(--neutral-500)" }}>{meta.total} results</span>
         </div>
         <div className={s.tableWrap}>
           <table className={s.table}>
@@ -247,7 +258,7 @@ export default function InfluencersPage() {
               </tr>
             </thead>
             <tbody>
-              {filtered.map((creator: { id: string; user?: { id: string; name: string; email: string; isActive: boolean; avatarUrl?: string }; verificationStatus: string; followerCount: number; platforms: string[]; socialPlatform?: string; createdAt: string }) => (
+              {influencers.map((creator: { id: string; user?: { id: string; name: string; email: string; isActive: boolean; avatarUrl?: string }; verificationStatus: string; followerCount: number; platforms: string[]; socialPlatform?: string; createdAt: string }) => (
                 <tr 
                   key={creator.id}
                   onClick={() => router.push(`/influencers/${creator.id}`)}
@@ -298,7 +309,7 @@ export default function InfluencersPage() {
               ))}
             </tbody>
           </table>
-          {filtered.length === 0 && (
+          {!isLoading && influencers.length === 0 && (
             <div className={s.emptyState}>
               <div className={s.emptyIcon}><StarIcon size={28} /></div>
               <div className={s.emptyTitle}>No influencers found</div>
@@ -308,7 +319,7 @@ export default function InfluencersPage() {
         </div>
         <div className={s.pagination}>
           <span className={s.paginationMeta}>
-            Showing {filtered.length === 0 ? 0 : (currentPage - 1) * meta.limit + 1}–{Math.min(currentPage * meta.limit, meta.total)} of {meta.total} influencers
+            Showing {influencers.length === 0 ? 0 : (currentPage - 1) * meta.limit + 1}–{Math.min(currentPage * meta.limit, meta.total)} of {meta.total} influencers
           </span>
           <div className={s.paginationBtns}>
             <button 
@@ -372,7 +383,7 @@ export default function InfluencersPage() {
             <label style={{ fontSize: 13, fontWeight: 600, color: "var(--neutral-700)", marginBottom: 8, display: "block" }}>Category</label>
             <select value={inviteCategory} onChange={e => setInviteCategory(e.target.value)} style={{ width: "100%", padding: "10px 12px", border: "1px solid var(--neutral-300)", borderRadius: 8, background: "white" }}>
               <option value="">Select a category</option>
-              {categories.map((cat: any) => (
+              {categories.map((cat: { id: string; name: string }) => (
                 <option key={cat.id} value={cat.id}>{cat.name}</option>
               ))}
             </select>
@@ -415,7 +426,7 @@ export default function InfluencersPage() {
           </div>
           <div style={{ display: "flex", justifyContent: "flex-end", gap: 12, marginTop: 16 }}>
             <button className={s.btnSecondary} onClick={() => setEditCreatorId(null)}>Cancel</button>
-            <button className={s.btnPrimary} onClick={handleEditStatus}>Save Changes</button>
+            <button className={s.btnPrimary} onClick={handleEditStatus} disabled={busy}>{busy ? "Saving..." : "Save Changes"}</button>
           </div>
         </div>
       </Modal>
@@ -425,7 +436,7 @@ export default function InfluencersPage() {
           <p style={{ color: "var(--neutral-700)", fontSize: 15, margin: 0 }}>Are you sure you want to suspend this influencer? They will no longer be able to bid on campaigns.</p>
           <div style={{ display: "flex", justifyContent: "flex-end", gap: 12, marginTop: 16 }}>
             <button className={s.btnSecondary} onClick={() => setDeleteCreatorId(null)}>Cancel</button>
-            <button className={s.btnPrimary} style={{ background: "var(--red-600)" }} onClick={() => { setDeleteCreatorId(null); toast.success("Influencer Suspended"); }}>Suspend Account</button>
+            <button className={s.btnPrimary} style={{ background: "var(--red-600)" }} onClick={handleSuspend} disabled={busy}>{busy ? "Suspending..." : "Suspend Account"}</button>
           </div>
         </div>
       </Modal>

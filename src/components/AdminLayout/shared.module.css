@@ -427,3 +427,88 @@
   .toolbarSearch { max-width: 100%; min-width: 0; }
   .toolbarActions { flex-wrap: wrap; }
 }
+
+
+/* === List / table entrance animation (staggered, respects reduced motion) === */
+@keyframes rowEnter {
+  from { opacity: 0; transform: translateY(8px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+.table tbody tr {
+  animation: rowEnter 0.35s ease both;
+}
+
+.table tbody tr:nth-child(1) { animation-delay: 30ms; }
+.table tbody tr:nth-child(2) { animation-delay: 60ms; }
+.table tbody tr:nth-child(3) { animation-delay: 90ms; }
+.table tbody tr:nth-child(4) { animation-delay: 120ms; }
+.table tbody tr:nth-child(5) { animation-delay: 150ms; }
+.table tbody tr:nth-child(6) { animation-delay: 180ms; }
+.table tbody tr:nth-child(7) { animation-delay: 210ms; }
+.table tbody tr:nth-child(8) { animation-delay: 240ms; }
+.table tbody tr:nth-child(9) { animation-delay: 270ms; }
+.table tbody tr:nth-child(10) { animation-delay: 300ms; }
+.table tbody tr:nth-child(11) { animation-delay: 330ms; }
+.table tbody tr:nth-child(12) { animation-delay: 360ms; }
+.table tbody tr:nth-child(n+13) { animation-delay: 360ms; }
+
+@media (prefers-reduced-motion: reduce) {
+  .table tbody tr { animation: none; }
+}
+
+
+/* === Detail-page layouts (responsive) === */
+.detailGrid3 {
+  display: grid;
+  grid-template-columns: 300px minmax(0, 1fr) 300px;
+  gap: 24px;
+}
+
+.detailGrid2 {
+  display: grid;
+  grid-template-columns: minmax(0, 2fr) minmax(0, 1fr);
+  gap: 24px;
+}
+
+.formGrid2 {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 16px;
+}
+
+.metricsGrid4 {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 20px;
+  margin-bottom: 24px;
+}
+
+@media (max-width: 1100px) {
+  .detailGrid3 { grid-template-columns: minmax(0, 1fr); }
+}
+
+@media (max-width: 1024px) {
+  .metricsGrid4 { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+
+@media (max-width: 900px) {
+  .detailGrid2 { grid-template-columns: minmax(0, 1fr); }
+}
+
+@media (max-width: 560px) {
+  .metricsGrid4 { grid-template-columns: minmax(0, 1fr); }
+  .formGrid2 { grid-template-columns: minmax(0, 1fr); }
+}
+
+/* Detail cards fade in with a small stagger */
+.detailGrid3 > *, .detailGrid2 > *, .metricsGrid4 > * {
+  animation: rowEnter 0.4s ease both;
+}
+.detailGrid3 > *:nth-child(2), .detailGrid2 > *:nth-child(2), .metricsGrid4 > *:nth-child(2) { animation-delay: 70ms; }
+.detailGrid3 > *:nth-child(3), .metricsGrid4 > *:nth-child(3) { animation-delay: 140ms; }
+.metricsGrid4 > *:nth-child(4) { animation-delay: 210ms; }
+
+@media (prefers-reduced-motion: reduce) {
+  .detailGrid3 > *, .detailGrid2 > *, .metricsGrid4 > * { animation: none; }
+}

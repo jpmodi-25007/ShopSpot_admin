@@ -8,13 +8,15 @@ import { fetcher } from "@/lib/fetcher";
 import AdminLayout from "@/components/AdminLayout/AdminLayout";
 import Modal from "@/components/Modal/Modal";
 import {
-  Users, UserPlus, Search, Filter, MoreVertical,
-  ShieldAlert, Mail, MapPin, Eye, Edit3, Trash2, Shield,
+  Users, Search, Eye, Trash2,
   Plus, Edit2, ChevronLeft, ChevronRight, Download, X,
 } from "lucide-react";
 import toast from "react-hot-toast";
 import s from "../../components/AdminLayout/shared.module.css";
 import { API_URL } from "@/config/constants";
+import { apiDelete, apiPost, authHeaders, buildQuery, createdFromFor, fetchAllPages, messageFromBody } from "@/lib/api";
+import { downloadCsv } from "@/lib/csv";
+import { useDebounce } from "@/lib/useDebounce";
 
 function statusClass(isActive: boolean) {
   if (isActive) return s.statusActive;
@@ -24,18 +26,29 @@ function statusClass(isActive: boolean) {
 export default function UsersPage() {
   const router = useRouter();
   const [currentPage, setCurrentPage] = useState(1);
-  const { data, error, mutate } = useSWR(`${API_URL}/admin/users?page=${currentPage}&limit=50`, fetcher);
-  const users = data?.data || [];
-  const meta = data?.meta || { total: 0, page: 1, limit: 50, totalPages: 1 };
-
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState("ALL");
   const [dateFilter, setDateFilter] = useState("ALL");
+  const debouncedSearch = useDebounce(search.trim(), 350);
+
+  const query = buildQuery({
+    page: currentPage,
+    limit: 50,
+    search: debouncedSearch || undefined,
+    status: statusFilter,
+    createdFrom: createdFromFor(dateFilter),
+  });
+  const { data, error, mutate, isLoading } = useSWR(`${API_URL}/admin/users${query}`, fetcher);
+  const users = data?.data || [];
+  const meta = data?.meta || { total: 0, page: 1, limit: 50, totalPages: 1 };
+
+  // Reset to page 1 when filters change so results stay in sync with the query.
+
   const [isInviteOpen, setInviteOpen] = useState(false);
   const [editUserId, setEditUserId] = useState<string | null>(null);
   const [deleteUserId, setDeleteUserId] = useState<string | null>(null);
+  const [busy, setBusy] = useState(false);
 
-  // Forms state
   const [inviteEmail, setInviteEmail] = useState("");
   const [inviteName, setInviteName] = useState("");
   const [inviteMobile, setInviteMobile] = useState("");
@@ -43,74 +56,52 @@ export default function UsersPage() {
   const [inviteAvatar, setInviteAvatar] = useState<File | null>(null);
   const [inviteAvatarPreview, setInviteAvatarPreview] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
-  
   const [editStatus, setEditStatus] = useState("Active");
 
+  const resetInvite = () => {
+    setInviteEmail("");
+    setInviteName("");
+    setInviteMobile("");
+    setInviteRole("CUSTOMER");
+    setInviteAvatar(null);
+    if (inviteAvatarPreview) URL.revokeObjectURL(inviteAvatarPreview);
+    setInviteAvatarPreview(null);
+  };
+
+  const uploadAvatar = async (file: File): Promise<string | undefined> => {
+    const formData = new FormData();
+    formData.append("file", file);
+    const uploadRes = await fetch(`${API_URL}/upload/image`, {
+      method: "POST",
+      headers: authHeaders(false),
+      body: formData,
+    });
+    const uploadData = await uploadRes.json().catch(() => ({}));
+    if (!uploadRes.ok) throw new Error(messageFromBody(uploadData, "Failed to upload avatar"));
+    return uploadData?.data?.url || uploadData?.data?.secureUrl;
+  };
+
   const handleInvite = async () => {
-    if (!inviteName || !inviteEmail || !inviteRole) {
+    if (!inviteName.trim() || !inviteEmail.trim() || !inviteRole) {
       toast.error("Name, Email, and Role are required");
       return;
     }
-    
     setIsSubmitting(true);
     try {
-      const token = localStorage.getItem("accessToken");
-      
-      let avatarUrl: string | undefined;
-      
-      if (inviteAvatar) {
-        const formData = new FormData();
-        formData.append("file", inviteAvatar);
-        
-        const uploadRes = await fetch(`${API_URL}/upload/image`, {
-          method: "POST",
-          headers: {
-            Authorization: `Bearer ${token}`
-          },
-          body: formData
-        });
-        
-        if (!uploadRes.ok) throw new Error("Failed to upload avatar");
-        
-        const uploadData = await uploadRes.json();
-        if (uploadData?.data?.url) {
-          avatarUrl = uploadData.data.url;
-        }
-      }
-
-      const res = await fetch(`${API_URL}/admin/users`, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${token}`
-        },
-        body: JSON.stringify({
-          name: inviteName,
-          email: inviteEmail,
-          mobile: inviteMobile,
-          role: inviteRole,
-          avatarUrl
-        })
+      const avatarUrl = inviteAvatar ? await uploadAvatar(inviteAvatar) : undefined;
+      await apiPost("/admin/users", {
+        name: inviteName.trim(),
+        email: inviteEmail.trim(),
+        mobile: inviteMobile.trim() || undefined,
+        role: inviteRole,
+        avatarUrl,
       });
-
-      if (!res.ok) {
-        const err = await res.json();
-        throw new Error(err.message || "Failed to create user");
-      }
-
-      toast.success(`User ${inviteName} created successfully!`);
+      toast.success(`User ${inviteName.trim()} created successfully`);
       setInviteOpen(false);
+      resetInvite();
       mutate();
-      setInviteEmail("");
-      setInviteName("");
-      setInviteMobile("");
-      setInviteRole("CUSTOMER");
-      setInviteAvatar(null);
-      if (inviteAvatarPreview) URL.revokeObjectURL(inviteAvatarPreview);
-      setInviteAvatarPreview(null);
-    } catch (e: any) {
-      toast.error(e.message || "Failed to create user");
-      console.error(e);
+    } catch (e: unknown) {
+      toast.error((e as Error).message || "Failed to create user");
     } finally {
       setIsSubmitting(false);
     }
@@ -131,75 +122,65 @@ export default function UsersPage() {
   };
 
   const handleEditStatus = async () => {
+    if (!editUserId) return;
+    setBusy(true);
     try {
-      if (!editUserId) return;
-      const token = localStorage.getItem("accessToken");
-      const res = await fetch(`${API_URL}/admin/users/${editUserId}/suspend`, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${token}`
-        },
-        body: JSON.stringify({ isActive: editStatus !== "Suspended" })
-      });
-      if (res.ok) {
-        setEditUserId(null);
-        mutate();
-      }
-    } catch (e) {
-      console.error(e);
+      await apiPost(`/admin/users/${editUserId}/suspend`, { isActive: editStatus !== "Suspended" });
+      toast.success(editStatus === "Suspended" ? "User suspended" : "User activated");
+      setEditUserId(null);
+      mutate();
+    } catch (e: unknown) {
+      toast.error((e as Error).message);
+    } finally {
+      setBusy(false);
     }
   };
 
-  const filtered = users.filter((u: { name?: string; email?: string; isActive?: boolean; createdAt?: string }) => {
-    let matchStatus = true;
-    if (statusFilter === "ACTIVE") matchStatus = u.isActive === true;
-    if (statusFilter === "SUSPENDED") matchStatus = u.isActive === false;
-    
-    let matchDate = true;
-    if (dateFilter !== "ALL" && u.createdAt) {
-      const joinDate = new Date(u.createdAt);
-      const now = new Date();
-      const diffTime = Math.abs(now.getTime() - joinDate.getTime());
-      const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
-      
-      if (dateFilter === "LAST_7_DAYS") matchDate = diffDays <= 7;
-      if (dateFilter === "LAST_30_DAYS") matchDate = diffDays <= 30;
-      if (dateFilter === "THIS_YEAR") matchDate = joinDate.getFullYear() === now.getFullYear();
+  const handleDelete = async () => {
+    if (!deleteUserId) return;
+    setBusy(true);
+    try {
+      await apiDelete(`/admin/users/${deleteUserId}`);
+      toast.success("User deleted");
+      setDeleteUserId(null);
+      mutate();
+    } catch (e: unknown) {
+      toast.error((e as Error).message);
+    } finally {
+      setBusy(false);
     }
-    
-    if (!search) return matchStatus && matchDate;
-    const searchLower = search.toLowerCase();
-    const matchName = u.name?.toLowerCase().includes(searchLower) || false;
-    const matchEmail = u.email?.toLowerCase().includes(searchLower) || false;
-    return matchStatus && matchDate && (matchName || matchEmail);
-  });
+  };
 
-  const handleExportCSV = () => {
-    if (filtered.length === 0) {
-      toast.error("No data to export");
-      return;
+  const handleExportCSV = async () => {
+    try {
+      toast.loading("Preparing export...", { id: "users-export" });
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const rows = await fetchAllPages<any>("/admin/users", {
+        search: debouncedSearch || undefined,
+        status: statusFilter,
+        createdFrom: createdFromFor(dateFilter),
+      });
+      if (rows.length === 0) {
+        toast.error("No data to export", { id: "users-export" });
+        return;
+      }
+      downloadCsv(
+        "users_export.csv",
+        ["ID", "Name", "Email", "Role", "Mobile", "Status", "Joined"],
+        rows.map((u) => [
+          u.id,
+          u.name || "",
+          u.email || "",
+          u.role,
+          u.mobile || "",
+          u.isActive ? "Active" : "Suspended",
+          u.createdAt ? new Date(String(u.createdAt)).toISOString() : "",
+        ]),
+      );
+      toast.success(`Exported ${rows.length} users`, { id: "users-export" });
+    } catch (e: unknown) {
+      toast.error((e as Error).message || "Export failed", { id: "users-export" });
     }
-    const headers = ["ID", "Name", "Email", "Role", "Mobile", "Status", "Joined"];
-    const rows = filtered.map((u: any) => [
-      u.id,
-      `"${u.name || ''}"`,
-      `"${u.email || ''}"`,
-      u.role,
-      `"${u.mobile || ''}"`,
-      u.isActive ? "Active" : "Suspended",
-      new Date(u.createdAt).toISOString()
-    ]);
-    const csvContent = "data:text/csv;charset=utf-8," 
-      + [headers.join(","), ...rows.map((r: any) => r.join(","))].join("\n");
-    const encodedUri = encodeURI(csvContent);
-    const link = document.createElement("a");
-    link.setAttribute("href", encodedUri);
-    link.setAttribute("download", "users_export.csv");
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
-    toast.success("Export successful");
   };
 
   return (
@@ -222,6 +203,12 @@ export default function UsersPage() {
         </div>
       </div>
 
+      {error && (
+        <div style={{ padding: 12, background: "#fef2f2", color: "#b91c1c", borderRadius: 8, marginBottom: 12, fontSize: 14 }}>
+          {(error as Error).message || "Failed to load users"}
+        </div>
+      )}
+
       {/* Toolbar */}
       <div className={s.toolbar}>
         <div className={s.toolbarSearch}>
@@ -232,14 +219,14 @@ export default function UsersPage() {
             placeholder="Search by name or email..."
             className={s.toolbarSearchInput}
             value={search}
-            onChange={(e) => setSearch(e.target.value)}
+            onChange={(e) => { setSearch(e.target.value); setCurrentPage(1); }}
           />
         </div>
         <div className={s.toolbarActions}>
           <select 
             className={s.toolbarFilter} 
             value={statusFilter} 
-            onChange={(e) => setStatusFilter(e.target.value)}
+            onChange={(e) => { setStatusFilter(e.target.value); setCurrentPage(1); }}
             style={{ padding: "6px 12px", borderRadius: "6px", border: "1px solid var(--neutral-300)", fontSize: "13px", background: "white", cursor: "pointer" }}
           >
             <option value="ALL">All Status</option>
@@ -249,7 +236,7 @@ export default function UsersPage() {
           <select 
             className={s.toolbarFilter} 
             value={dateFilter} 
-            onChange={(e) => setDateFilter(e.target.value)}
+            onChange={(e) => { setDateFilter(e.target.value); setCurrentPage(1); }}
             style={{ padding: "6px 12px", borderRadius: "6px", border: "1px solid var(--neutral-300)", fontSize: "13px", background: "white", cursor: "pointer" }}
           >
             <option value="ALL">All Time</option>
@@ -264,7 +251,7 @@ export default function UsersPage() {
       <div className={s.card}>
         <div className={s.cardHeader}>
           <span className={s.cardTitle}>All Users</span>
-          <span style={{ fontSize: "12px", color: "var(--neutral-500)" }}>{filtered.length} results</span>
+          <span style={{ fontSize: "12px", color: "var(--neutral-500)" }}>{meta.total} results</span>
         </div>
         <div className={s.tableWrap}>
           <table className={s.table}>
@@ -278,7 +265,7 @@ export default function UsersPage() {
               </tr>
             </thead>
             <tbody>
-              {filtered.map((user: { id: string; name: string; email: string; role: string; isActive: boolean; lastLoginAt?: string; mobile?: string; createdAt: string; [key: string]: any }) => (
+              {users.map((user: { id: string; name: string; email: string; role: string; isActive: boolean; lastLoginAt?: string; mobile?: string; createdAt: string; }) => (
                 <tr
                   key={user.id}
                   onClick={() => router.push(`/users/${user.id}`)}
@@ -331,7 +318,7 @@ export default function UsersPage() {
               ))}
             </tbody>
           </table>
-          {filtered.length === 0 && (
+          {!isLoading && users.length === 0 && (
             <div className={s.emptyState}>
               <div className={s.emptyIcon}><Users size={28} /></div>
               <div className={s.emptyTitle}>No users found</div>
@@ -341,7 +328,7 @@ export default function UsersPage() {
         </div>
         <div className={s.pagination}>
           <span className={s.paginationMeta}>
-            Showing {filtered.length === 0 ? 0 : (currentPage - 1) * meta.limit + 1}–{Math.min(currentPage * meta.limit, meta.total)} of {meta.total} users
+            Showing {users.length === 0 ? 0 : (currentPage - 1) * meta.limit + 1}–{Math.min(currentPage * meta.limit, meta.total)} of {meta.total} users
           </span>
           <div className={s.paginationBtns}>
             <button 
@@ -424,7 +411,7 @@ export default function UsersPage() {
             <select value={inviteRole} onChange={e => setInviteRole(e.target.value)} style={{ width: "100%", padding: "10px 12px", border: "1px solid var(--neutral-300)", borderRadius: 8, background: "white" }}>
               <option value="CUSTOMER">Customer</option>
               <option value="SHOPKEEPER">Shopkeeper</option>
-              <option value="ADMIN">Admin</option>
+              <option value="INFLUENCER">Influencer</option>
             </select>
           </div>
           <div style={{ display: "flex", justifyContent: "flex-end", gap: 12, marginTop: 16 }}>
@@ -450,8 +437,8 @@ export default function UsersPage() {
             </select>
           </div>
           <div style={{ display: "flex", justifyContent: "flex-end", gap: 12, marginTop: 16 }}>
-            <button className={s.btnSecondary} onClick={() => setEditUserId(null)}>Cancel</button>
-            <button className={s.btnPrimary} onClick={handleEditStatus}>Save Changes</button>
+            <button className={s.btnSecondary} onClick={() => setEditUserId(null)} disabled={busy}>Cancel</button>
+            <button className={s.btnPrimary} onClick={handleEditStatus} disabled={busy}>{busy ? "Saving..." : "Save Changes"}</button>
           </div>
         </div>
       </Modal>
@@ -460,8 +447,8 @@ export default function UsersPage() {
         <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
           <p style={{ color: "var(--neutral-700)", fontSize: 15, margin: 0 }}>Are you sure you want to delete this user? This action cannot be undone.</p>
           <div style={{ display: "flex", justifyContent: "flex-end", gap: 12, marginTop: 16 }}>
-            <button className={s.btnSecondary} style={{ flex: 1, justifyContent: "center" }} onClick={() => setDeleteUserId(null)}>Cancel</button>
-            <button className={s.btnPrimary} style={{ background: "var(--red-600)" }} onClick={() => { setDeleteUserId(null); toast.success("User Deleted"); }}>Delete User</button>
+            <button className={s.btnSecondary} style={{ flex: 1, justifyContent: "center" }} onClick={() => setDeleteUserId(null)} disabled={busy}>Cancel</button>
+            <button className={s.btnPrimary} style={{ background: "var(--red-600)" }} onClick={handleDelete} disabled={busy}>{busy ? "Deleting..." : "Delete User"}</button>
           </div>
         </div>
       </Modal>
