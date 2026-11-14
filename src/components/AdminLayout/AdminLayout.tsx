@@ -24,6 +24,7 @@ import {
   Menu,
   X,
   Calendar,
+  CreditCard,
 } from "lucide-react";
 import styles from "./AdminLayout.module.css";
 import toast from "react-hot-toast";
@@ -62,6 +63,7 @@ const navItems: NavItem[] = [
   { label: "Events", href: "/events", icon: Calendar, section: "main" },
   { label: "User Management", href: "/users", icon: Users, section: "main" },
   { label: "Influencers", href: "/influencers", icon: Star, section: "main", badgeKey: "pendingInfluencers" },
+  { label: "Subscriptions", href: "/subscriptions", icon: CreditCard, section: "main" },
   { label: "Moderation", href: "/moderation", icon: ShieldAlert, section: "ops", badgeKey: "pendingReports" },
   { label: "Analytics", href: "/analytics", icon: BarChart3, section: "ops" },
   { label: "Settings", href: "/settings", icon: Settings, section: "ops" },
