@@ -466,7 +466,7 @@
 
   .menuBtn { display: flex; }
 
-  .searchContainer { width: 200px; }
+  .searchContainer { width: auto; flex: 1; min-width: 0; max-width: 360px; }
 
   .pageContainer { padding: 20px 16px; }
 

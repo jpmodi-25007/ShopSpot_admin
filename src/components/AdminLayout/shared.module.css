@@ -190,6 +190,7 @@
 
 .table {
   width: 100%;
+  min-width: 760px;
   border-collapse: collapse;
   font-size: 13.5px;
 }
@@ -223,6 +224,7 @@
   padding: 14px 18px;
   color: var(--neutral-700);
   vertical-align: middle;
+  white-space: nowrap;
 }
 
 /* === Status Badges === */

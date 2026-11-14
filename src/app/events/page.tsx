@@ -177,7 +177,7 @@ export default function EventsPage() {
         </table>
       </div>
 
-      <Modal isOpen={isModalOpen} onClose={() => setModalOpen(false)} title={editingId ? "Edit Event" : "Create Event"}>
+      <Modal isOpen={isModalOpen} onClose={() => setModalOpen(false)} title={editingId ? "Edit Event" : "Create Event"} width={640}>
         <form onSubmit={handleSubmit} className={styles.form}>
           
           <div className={styles.formGroup}>
@@ -211,7 +211,7 @@ export default function EventsPage() {
             />
           </div>
 
-          <div className="grid grid-cols-2 gap-4 mb-4">
+          <div className={styles.row}>
             <div className={styles.formGroup}>
               <label>Start Date</label>
               <input 

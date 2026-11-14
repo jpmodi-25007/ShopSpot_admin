@@ -246,88 +246,48 @@ export default function PromotionsPage() {
           isOpen={isModalOpen}
           onClose={() => !isSubmitting && setModalOpen(false)}
           title={editingId ? "Edit Banner" : "Create New Banner"}
+          width={680}
         >
           <form onSubmit={handleSubmit}>
             <div className={styles.formGroup}>
-              <label>Banner Image *</label>
+              <label>Banner image</label>
+              <p className={styles.hint}>Use a wide photo. 16:9 looks best on the home screen.</p>
               <input
                 type="file"
                 accept="image/*"
                 id="bannerImage"
                 onChange={handleFileChange}
-                style={{ display: "none" }}
+                className={styles.fileInput}
               />
-              <label htmlFor="bannerImage" className={styles.imageUpload} style={{ display: 'block' }}>
+              <label htmlFor="bannerImage" className={styles.imageUpload}>
                 {imagePreview ? (
-                  <img src={imagePreview} alt="Preview" className={styles.imagePreview} />
+                  <img src={imagePreview} alt="Banner preview" className={styles.imagePreview} />
                 ) : (
-                  <div>
-                    <ImageIcon size={32} color="#9ca3af" style={{ margin: "0 auto 8px" }} />
-                    <p style={{ color: "#6b7280", fontSize: 14 }}>Click to upload image (16:9 recommended)</p>
-                  </div>
+                  <span className={styles.uploadEmpty}>
+                    <ImageIcon size={28} />
+                    Click to upload
+                  </span>
                 )}
               </label>
             </div>
 
-            <div className={styles.formGroup}>
-              <label>Internal Title</label>
-              <input
-                type="text"
-                className={styles.input}
-                placeholder="e.g. Summer Sale 2026"
-                value={title}
-                onChange={(e) => setTitle(e.target.value)}
-              />
-            </div>
-
+            <div className={styles.section}>Details</div>
             <div className={styles.row}>
               <div className={styles.formGroup}>
-                <label>Shop ID (Optional)</label>
+                <label htmlFor="bannerTitle">Title</label>
                 <input
+                  id="bannerTitle"
                   type="text"
                   className={styles.input}
-                  placeholder="Paste Shop UUID"
-                  value={shopId}
-                  onChange={(e) => setShopId(e.target.value)}
+                  placeholder="Summer Sale 2026"
+                  value={title}
+                  onChange={(e) => setTitle(e.target.value)}
                 />
               </div>
               <div className={styles.formGroup}>
-                <label>Product ID (Optional)</label>
+                <label htmlFor="bannerOrder">Display order</label>
                 <input
-                  type="text"
-                  className={styles.input}
-                  placeholder="Paste Product UUID"
-                  value={productId}
-                  onChange={(e) => setProductId(e.target.value)}
-                />
-              </div>
-            </div>
-
-            <div className={styles.row}>
-              <div className={styles.formGroup}>
-                <label>Start Date</label>
-                <input
-                  type="date"
-                  className={styles.input}
-                  value={startDate}
-                  onChange={(e) => setStartDate(e.target.value)}
-                />
-              </div>
-              <div className={styles.formGroup}>
-                <label>End Date</label>
-                <input
-                  type="date"
-                  className={styles.input}
-                  value={endDate}
-                  onChange={(e) => setEndDate(e.target.value)}
-                />
-              </div>
-            </div>
-
-            <div className={styles.row}>
-              <div className={styles.formGroup}>
-                <label>Display Order</label>
-                <input
+                  id="bannerOrder"
                   type="number"
                   className={styles.input}
                   min="0"
@@ -337,31 +297,82 @@ export default function PromotionsPage() {
               </div>
             </div>
 
-            <div className={styles.formGroup}>
-              <label className={styles.checkboxContainer}>
+            <div className={styles.section}>Schedule</div>
+            <div className={styles.row}>
+              <div className={styles.formGroup}>
+                <label htmlFor="bannerStart">Start date</label>
                 <input
-                  type="checkbox"
-                  className={styles.checkbox}
-                  checked={isActive}
-                  onChange={(e) => setIsActive(e.target.checked)}
+                  id="bannerStart"
+                  type="date"
+                  className={styles.input}
+                  value={startDate}
+                  onChange={(e) => setStartDate(e.target.value)}
                 />
-                Active (Show to users)
-              </label>
+              </div>
+              <div className={styles.formGroup}>
+                <label htmlFor="bannerEnd">End date</label>
+                <input
+                  id="bannerEnd"
+                  type="date"
+                  className={styles.input}
+                  value={endDate}
+                  onChange={(e) => setEndDate(e.target.value)}
+                />
+              </div>
             </div>
 
-            <div style={{ display: "flex", justifyContent: "flex-end", gap: "12px", marginTop: "24px" }}>
+            <div className={styles.section}>Link</div>
+            <p className={styles.hint}>Optional. Leave blank for a banner that does not open a shop or product.</p>
+            <div className={styles.row}>
+              <div className={styles.formGroup}>
+                <label htmlFor="bannerShop">Shop ID</label>
+                <input
+                  id="bannerShop"
+                  type="text"
+                  className={styles.input}
+                  placeholder="Shop UUID"
+                  value={shopId}
+                  onChange={(e) => setShopId(e.target.value)}
+                />
+              </div>
+              <div className={styles.formGroup}>
+                <label htmlFor="bannerProduct">Product ID</label>
+                <input
+                  id="bannerProduct"
+                  type="text"
+                  className={styles.input}
+                  placeholder="Product UUID"
+                  value={productId}
+                  onChange={(e) => setProductId(e.target.value)}
+                />
+              </div>
+            </div>
+
+            <label className={styles.activeRow}>
+              <input
+                type="checkbox"
+                className={styles.checkbox}
+                checked={isActive}
+                onChange={(e) => setIsActive(e.target.checked)}
+              />
+              <span>
+                <strong>Show to users</strong>
+                <small>Turn off to keep this banner as a draft.</small>
+              </span>
+            </label>
+
+            <div className={styles.formFooter}>
               <button
                 type="button"
                 onClick={() => setModalOpen(false)}
-                className={styles.addBtn}
-                style={{ background: "#fff", color: "#000", border: "1px solid #d1d5db" }}
+                className={styles.cancelBtn}
                 disabled={isSubmitting}
               >
                 Cancel
               </button>
               <button
                 type="submit"
-                className={styles.addBtn}
+                className={styles.saveBtn}
                 disabled={isSubmitting}
               >
                 {isSubmitting ? "Saving..." : "Save Banner"}
