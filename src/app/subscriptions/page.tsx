@@ -101,15 +101,24 @@ export default function SubscriptionsPage() {
 
   const [overrideModal, setOverrideModal] = useState<{ shopId: string; shopName: string; currentTier: string } | null>(null);
   const [overrideTier, setOverrideTier] = useState<string>("PRO");
+  const [overrideDuration, setOverrideDuration] = useState<number>(1);
+  const [overrideNote, setOverrideNote] = useState<string>("");
   const [overriding, setOverriding] = useState(false);
 
   async function handleOverridePlan() {
     if (!overrideModal) return;
     setOverriding(true);
     try {
-      await apiPost(`/admin/shops/${overrideModal.shopId}/override-plan`, { tier: overrideTier });
-      toast.success(`Plan updated to ${overrideTier}`);
+      await apiPost(`/admin/shops/${overrideModal.shopId}/override-plan`, {
+        tier: overrideTier,
+        durationMonths: overrideDuration,
+        note: overrideNote.trim() || undefined,
+      });
+      const durationLabel = overrideDuration === 0 ? "lifetime" : `${overrideDuration} month(s)`;
+      toast.success(`Plan updated to ${overrideTier} for ${durationLabel}`);
       setOverrideModal(null);
+      setOverrideNote("");
+      setOverrideDuration(1);
       mutateSubs();
     } catch (e: unknown) {
       toast.error((e as Error).message || "Failed to override plan");
@@ -415,6 +424,8 @@ export default function SubscriptionsPage() {
                               currentTier: sub.planTier,
                             });
                             setOverrideTier(sub.planTier === "PREMIUM" ? "PRO" : "PREMIUM");
+                            setOverrideDuration(1);
+                            setOverrideNote("");
                           }}
                         >
                           Change Plan
@@ -510,23 +521,60 @@ export default function SubscriptionsPage() {
               </div>
               <div className={styles.modalBody}>
                 <p className={styles.formHint}>
-                  Currently on <strong>{overrideModal.currentTier}</strong> plan. Selecting a new tier will immediately update the shop&apos;s limits.
+                  Currently on <strong>{overrideModal.currentTier}</strong> plan. Changes take effect immediately — product and event limits update at once.
                 </p>
-                <label className={styles.formLabel}>Select New Plan</label>
+
+                <label className={styles.formLabel}>New Plan Tier</label>
                 <select
                   className={styles.formInput}
                   value={overrideTier}
                   onChange={(e) => setOverrideTier(e.target.value)}
                 >
-                  <option value="FREE">Free (50 Products, 0 Events)</option>
-                  <option value="PRO">Pro (200 Products, 1 Event/mo)</option>
-                  <option value="PREMIUM">Premium (500 Products, 3 Events/mo)</option>
+                  <option value="FREE">🆓 Free — 50 Products, 0 Events</option>
+                  <option value="PRO">⭐ Pro — 200 Products, 1 Event/mo</option>
+                  <option value="PREMIUM">👑 Premium — 500 Products, 3 Events/mo</option>
                 </select>
+
+                <label className={styles.formLabel} style={{ marginTop: 14, display: "block" }}>
+                  Duration (months)
+                </label>
+                <select
+                  className={styles.formInput}
+                  value={overrideDuration}
+                  onChange={(e) => setOverrideDuration(Number(e.target.value))}
+                >
+                  <option value={0}>♾️ Lifetime / No Expiry</option>
+                  <option value={1}>1 month</option>
+                  <option value={2}>2 months</option>
+                  <option value={3}>3 months</option>
+                  <option value={6}>6 months</option>
+                  <option value={12}>12 months (1 year)</option>
+                  <option value={24}>24 months (2 years)</option>
+                </select>
+                <p style={{ fontSize: 12, color: "#6B7280", marginTop: 6 }}>
+                  {overrideDuration === 0
+                    ? "⚠️ This plan will never expire. Use for pilot or lifetime partners."
+                    : `Plan will expire on ${new Date(Date.now() + overrideDuration * 30 * 24 * 60 * 60 * 1000).toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "numeric" })}.`}
+                </p>
+
+                <label className={styles.formLabel} style={{ marginTop: 14, display: "block" }}>
+                  Internal Note (optional)
+                </label>
+                <textarea
+                  className={styles.formTextarea}
+                  rows={2}
+                  placeholder="e.g. Pilot partner — 3 months free, review on Jan 2027"
+                  value={overrideNote}
+                  onChange={(e) => setOverrideNote(e.target.value)}
+                />
+                <p style={{ fontSize: 11, color: "#9CA3AF", marginTop: 4 }}>
+                  Stored in audit log. The shopkeeper will be notified of the plan change.
+                </p>
               </div>
               <div className={styles.modalFooter}>
                 <button className={styles.cancelBtn} onClick={() => setOverrideModal(null)}>Cancel</button>
                 <button className={styles.saveBtn} onClick={handleOverridePlan} disabled={overriding}>
-                  {overriding ? "Updating..." : "Confirm Plan"}
+                  {overriding ? "Updating..." : "Confirm & Apply Plan"}
                 </button>
               </div>
             </div>

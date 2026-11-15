@@ -7,7 +7,7 @@ import Modal from "@/components/Modal/Modal";
 import {
   ChevronLeft, Edit2, Mail, ShieldOff, ShieldCheck, Star,
   MapPin, CheckCircle2, AlertTriangle, Plus, Search,
-  Trash2, Image, X
+  Trash2, Image, X, CreditCard, Calendar, Package, Zap
 } from "lucide-react";
 import useSWR from "swr";
 import { fetcher } from "@/lib/fetcher";
@@ -26,6 +26,13 @@ export default function ShopDetailPage({ params }: { params: Promise<{ id: strin
   const [isEditShopOpen, setEditShopOpen] = useState(false);
   const [busy, setBusy] = useState(false);
   const [productSearch, setProductSearch] = useState("");
+
+  // Subscription override state
+  const [subModal, setSubModal] = useState(false);
+  const [overrideTier, setOverrideTier] = useState("PRO");
+  const [overrideDuration, setOverrideDuration] = useState(1);
+  const [overrideNote, setOverrideNote] = useState("");
+  const [overriding, setOverriding] = useState(false);
 
   const [newProductName, setNewProductName] = useState("");
   const [newProductCategory, setNewProductCategory] = useState("Electronics");
@@ -198,6 +205,28 @@ export default function ShopDetailPage({ params }: { params: Promise<{ id: strin
       toast.error((e as Error).message);
     } finally {
       setBusy(false);
+    }
+  };
+
+  const handleOverridePlan = async () => {
+    if (!shop) return;
+    setOverriding(true);
+    try {
+      await apiPost(`/admin/shops/${id}/override-plan`, {
+        tier: overrideTier,
+        durationMonths: overrideDuration,
+        note: overrideNote.trim() || undefined,
+      });
+      const durationLabel = overrideDuration === 0 ? "lifetime (no expiry)" : `${overrideDuration} month(s)`;
+      toast.success(`Plan updated to ${overrideTier} for ${durationLabel}`);
+      setSubModal(false);
+      setOverrideNote("");
+      setOverrideDuration(1);
+      mutate();
+    } catch (e: unknown) {
+      toast.error((e as Error).message || "Failed to update plan");
+    } finally {
+      setOverriding(false);
     }
   };
 
@@ -451,6 +480,144 @@ export default function ShopDetailPage({ params }: { params: Promise<{ id: strin
 
             </div>
           </div>
+
+          {/* Subscription & Quota Card */}
+          <div className={s.card} style={{ padding: 24 }}>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 16 }}>
+              <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+                <div style={{ width: 36, height: 36, borderRadius: 8, background: "#FEF3C7", color: "#D97706", display: "flex", alignItems: "center", justifyContent: "center" }}>
+                  <CreditCard size={18} />
+                </div>
+                <div>
+                  <h3 className={s.cardTitle} style={{ margin: 0, fontSize: 15 }}>Subscription & Quotas</h3>
+                  <span style={{ fontSize: 12, color: "var(--neutral-500)" }}>Tier limits and validity</span>
+                </div>
+              </div>
+              <button
+                className={s.btnSecondary}
+                style={{ padding: "6px 12px", fontSize: 12 }}
+                onClick={() => {
+                  setOverrideTier(shop?.subscriptionTier || "PRO");
+                  setOverrideDuration(1);
+                  setOverrideNote("");
+                  setSubModal(true);
+                }}
+              >
+                <Zap size={13} style={{ marginRight: 4 }} />
+                Change / Extend
+              </button>
+            </div>
+
+            <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
+              {/* Current Tier & Status Row */}
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "12px 14px", background: "var(--neutral-50)", borderRadius: 8, border: "1px solid var(--neutral-200)" }}>
+                <div>
+                  <div style={{ fontSize: 11, color: "var(--neutral-500)", fontWeight: 600, textTransform: "uppercase" }}>Current Plan</div>
+                  <div style={{ display: "flex", alignItems: "center", gap: 8, marginTop: 4 }}>
+                    <span style={{ fontSize: 16, fontWeight: 700, color: "var(--neutral-900)" }}>
+                      {shop?.subscription?.planName || shop?.subscriptionTier || "Free"}
+                    </span>
+                    <span
+                      style={{
+                        fontSize: 11,
+                        fontWeight: 700,
+                        padding: "2px 8px",
+                        borderRadius: 12,
+                        background:
+                          shop?.subscriptionTier === "PREMIUM" ? "#FEF3C7" : shop?.subscriptionTier === "PRO" ? "#DBEAFE" : "#F3F4F6",
+                        color:
+                          shop?.subscriptionTier === "PREMIUM" ? "#B45309" : shop?.subscriptionTier === "PRO" ? "#1D4ED8" : "#4B5563",
+                      }}
+                    >
+                      {shop?.subscriptionTier === "PREMIUM" ? "👑 PREMIUM" : shop?.subscriptionTier === "PRO" ? "⭐ PRO" : "FREE"}
+                    </span>
+                  </div>
+                </div>
+                <div style={{ textAlign: "right" }}>
+                  <div style={{ fontSize: 11, color: "var(--neutral-500)", fontWeight: 600, textTransform: "uppercase" }}>Rate</div>
+                  <div style={{ fontSize: 15, fontWeight: 700, color: "var(--neutral-900)", marginTop: 4 }}>
+                    {shop?.subscription?.price ? `₹${shop.subscription.price}/mo` : "₹0 Forever"}
+                  </div>
+                </div>
+              </div>
+
+              {/* Expiry Date Row */}
+              <div style={{ display: "flex", alignItems: "center", gap: 12, padding: "8px 0", borderBottom: "1px solid var(--neutral-200)" }}>
+                <Calendar size={16} color="var(--neutral-400)" />
+                <div style={{ flex: 1 }}>
+                  <div style={{ fontSize: 12, color: "var(--neutral-500)" }}>Duration / Expiry</div>
+                  <div style={{ fontSize: 13, fontWeight: 600, color: "var(--neutral-800)" }}>
+                    {shop?.subscriptionExpiresAt
+                      ? `Valid until ${new Date(shop.subscriptionExpiresAt).toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "numeric" })}`
+                      : "Permanent / No Expiration"}
+                  </div>
+                </div>
+                {shop?.subscriptionExpiresAt && (
+                  <span
+                    style={{
+                      fontSize: 11,
+                      fontWeight: 600,
+                      padding: "2px 8px",
+                      borderRadius: 10,
+                      background: new Date(shop.subscriptionExpiresAt).getTime() > Date.now() ? "#ECFDF5" : "#FEF2F2",
+                      color: new Date(shop.subscriptionExpiresAt).getTime() > Date.now() ? "#059669" : "#DC2626",
+                    }}
+                  >
+                    {new Date(shop.subscriptionExpiresAt).getTime() > Date.now()
+                      ? `${Math.ceil((new Date(shop.subscriptionExpiresAt).getTime() - Date.now()) / (1000 * 60 * 60 * 24))} days left`
+                      : "Expired"}
+                  </span>
+                )}
+              </div>
+
+              {/* Product Quota Progress */}
+              <div>
+                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 6 }}>
+                  <span style={{ fontSize: 12, fontWeight: 600, color: "var(--neutral-700)", display: "flex", alignItems: "center", gap: 6 }}>
+                    <Package size={14} color="var(--neutral-400)" /> Products Quota
+                  </span>
+                  <span style={{ fontSize: 12, fontWeight: 700, color: "var(--neutral-900)" }}>
+                    {shop?.usage?.productsActive ?? shop?.products?.length ?? 0} / {shop?.usage?.productLimit ?? 50}
+                  </span>
+                </div>
+                <div style={{ height: 6, background: "var(--neutral-200)", borderRadius: 4, overflow: "hidden" }}>
+                  <div
+                    style={{
+                      height: "100%",
+                      borderRadius: 4,
+                      background:
+                        ((shop?.usage?.productsActive ?? shop?.products?.length ?? 0) / (shop?.usage?.productLimit || 50)) >= 1
+                          ? "#DC2626"
+                          : "#2563EB",
+                      width: `${Math.min(100, Math.round(((shop?.usage?.productsActive ?? shop?.products?.length ?? 0) / (shop?.usage?.productLimit || 50)) * 100))}%`,
+                    }}
+                  />
+                </div>
+              </div>
+
+              {/* Event Limit Progress */}
+              <div>
+                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 6 }}>
+                  <span style={{ fontSize: 12, fontWeight: 600, color: "var(--neutral-700)", display: "flex", alignItems: "center", gap: 6 }}>
+                    <Zap size={14} color="var(--neutral-400)" /> Home Banner Events / mo
+                  </span>
+                  <span style={{ fontSize: 12, fontWeight: 700, color: "var(--neutral-900)" }}>
+                    {shop?.eventsUsedThisMonth ?? 0} / {shop?.usage?.eventLimit ?? (shop?.subscriptionTier === "PREMIUM" ? 3 : shop?.subscriptionTier === "PRO" ? 1 : 0)}
+                  </span>
+                </div>
+                <div style={{ height: 6, background: "var(--neutral-200)", borderRadius: 4, overflow: "hidden" }}>
+                  <div
+                    style={{
+                      height: "100%",
+                      borderRadius: 4,
+                      background: "#F59E0B",
+                      width: `${Math.min(100, Math.round(((shop?.eventsUsedThisMonth ?? 0) / Math.max(1, shop?.usage?.eventLimit ?? (shop?.subscriptionTier === "PREMIUM" ? 3 : shop?.subscriptionTier === "PRO" ? 1 : 1))) * 100))}%`,
+                    }}
+                  />
+                </div>
+              </div>
+            </div>
+          </div>
         </div>
       </div>
 
@@ -585,6 +752,79 @@ export default function ShopDetailPage({ params }: { params: Promise<{ id: strin
           <div style={{ display: "flex", justifyContent: "flex-end", gap: 12, marginTop: 8 }}>
             <button className={s.btnSecondary} onClick={() => setEditShopOpen(false)} disabled={busy}>Cancel</button>
             <button className={s.btnPrimary} onClick={handleSaveShop} disabled={busy}>{busy ? "Saving..." : "Save Changes"}</button>
+          </div>
+        </div>
+      </Modal>
+
+      {/* Subscription & Plan Override Modal */}
+      <Modal isOpen={subModal} onClose={() => setSubModal(false)} title={`Change Subscription for ${shop?.name || "Shop"}`}>
+        <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
+          <p style={{ fontSize: 13, color: "var(--neutral-600)", margin: 0, lineHeight: 1.4 }}>
+            Update the subscription plan and assign initial duration for this shop. Quota increases and event permissions take effect immediately.
+          </p>
+
+          <div>
+            <label style={{ fontSize: 13, fontWeight: 600, color: "var(--neutral-700)", marginBottom: 8, display: "block" }}>
+              Select Plan Tier
+            </label>
+            <select
+              style={{ width: "100%", padding: "10px 12px", border: "1px solid var(--neutral-300)", borderRadius: 8, fontSize: 14 }}
+              value={overrideTier}
+              onChange={(e) => setOverrideTier(e.target.value)}
+            >
+              <option value="FREE">🆓 Free Starter (50 Products, 0 Events/mo — ₹0)</option>
+              <option value="PRO">⭐ Pro Growth (200 Products, 1 Event/mo — ₹499/mo)</option>
+              <option value="PREMIUM">👑 Premium VIP (500 Products, 3 Events/mo — ₹1,199/mo)</option>
+            </select>
+          </div>
+
+          <div>
+            <label style={{ fontSize: 13, fontWeight: 600, color: "var(--neutral-700)", marginBottom: 8, display: "block" }}>
+              Plan Duration (Months)
+            </label>
+            <select
+              style={{ width: "100%", padding: "10px 12px", border: "1px solid var(--neutral-300)", borderRadius: 8, fontSize: 14 }}
+              value={overrideDuration}
+              onChange={(e) => setOverrideDuration(Number(e.target.value))}
+            >
+              <option value={0}>♾️ Lifetime / Unlimited Duration (No Expiration)</option>
+              <option value={1}>1 Month (Default)</option>
+              <option value={2}>2 Months</option>
+              <option value={3}>3 Months (Quarterly Promotion / Free Trial)</option>
+              <option value={6}>6 Months (Half-Yearly)</option>
+              <option value={12}>12 Months (1 Full Year)</option>
+              <option value={24}>24 Months (2 Years)</option>
+            </select>
+            <p style={{ fontSize: 12, color: overrideDuration === 0 ? "#B45309" : "#059669", marginTop: 6, fontWeight: 500 }}>
+              {overrideDuration === 0
+                ? "💡 This shop will have active access indefinitely without expiring."
+                : `🗓️ Plan will be active until ${new Date(Date.now() + overrideDuration * 30 * 24 * 60 * 60 * 1000).toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "numeric" })}.`}
+            </p>
+          </div>
+
+          <div>
+            <label style={{ fontSize: 13, fontWeight: 600, color: "var(--neutral-700)", marginBottom: 8, display: "block" }}>
+              Admin Note / Reason (Optional)
+            </label>
+            <textarea
+              rows={2}
+              placeholder="e.g. Granted 3 months free trial for onboarding promotion"
+              value={overrideNote}
+              onChange={(e) => setOverrideNote(e.target.value)}
+              style={{ width: "100%", padding: "10px 12px", border: "1px solid var(--neutral-300)", borderRadius: 8, fontSize: 13, minHeight: 60 }}
+            />
+            <span style={{ fontSize: 11, color: "var(--neutral-500)", marginTop: 4, display: "block" }}>
+              Logged into the admin audit log. The shopkeeper will receive an in-app notification.
+            </span>
+          </div>
+
+          <div style={{ display: "flex", justifyContent: "flex-end", gap: 12, marginTop: 8 }}>
+            <button className={s.btnSecondary} onClick={() => setSubModal(false)} disabled={overriding}>
+              Cancel
+            </button>
+            <button className={s.btnPrimary} onClick={handleOverridePlan} disabled={overriding}>
+              {overriding ? "Updating Plan..." : "Confirm & Apply Plan"}
+            </button>
           </div>
         </div>
       </Modal>

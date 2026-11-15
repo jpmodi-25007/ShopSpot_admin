@@ -321,6 +321,7 @@ export default function ShopsPage() {
                 <th>Shop</th>
                 <th>Category</th>
                 <th>City</th>
+                <th>Plan</th>
                 <th>Rating</th>
                 <th>Status</th>
                 <th>Actions</th>
@@ -328,7 +329,7 @@ export default function ShopsPage() {
             </thead>
             <tbody>
               {shops.map((shop: {
-                  id: string; name: string; logoUrl?: string; city?: string; rating?: number | string; status?: string; isKycVerified?: boolean; owner?: { email?: string }; category?: { name?: string } | string;
+                  id: string; name: string; logoUrl?: string; city?: string; rating?: number | string; status?: string; isKycVerified?: boolean; subscriptionTier?: string; subscriptionExpiresAt?: string; owner?: { email?: string }; category?: { name?: string } | string;
                 }) => (
                 <tr 
                   key={shop.id} 
@@ -352,6 +353,25 @@ export default function ShopsPage() {
                   </td>
                   <td style={{ color: "var(--neutral-600)" }}>{(typeof shop.category === 'object' && shop.category?.name) || (typeof shop.category === 'string' ? shop.category : 'General')}</td>
                   <td style={{ color: "var(--neutral-600)" }}>{shop.city || 'N/A'}</td>
+                  <td>
+                    <span
+                      style={{
+                        display: "inline-flex",
+                        alignItems: "center",
+                        gap: 4,
+                        fontSize: 12,
+                        fontWeight: 700,
+                        padding: "3px 8px",
+                        borderRadius: 12,
+                        background:
+                          shop.subscriptionTier === "PREMIUM" ? "#FEF3C7" : shop.subscriptionTier === "PRO" ? "#DBEAFE" : "#F3F4F6",
+                        color:
+                          shop.subscriptionTier === "PREMIUM" ? "#B45309" : shop.subscriptionTier === "PRO" ? "#1D4ED8" : "#4B5563",
+                      }}
+                    >
+                      {shop.subscriptionTier === "PREMIUM" ? "👑 Premium" : shop.subscriptionTier === "PRO" ? "⭐ Pro" : "Free"}
+                    </span>
+                  </td>
                   <td style={{ fontWeight: 700, color: "var(--neutral-900)" }}>
                     {shop.rating ? `${Number(shop.rating).toFixed(1)} Stars` : "No Ratings"}
                   </td>
